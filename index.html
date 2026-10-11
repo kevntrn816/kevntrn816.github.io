@@ -1,0 +1,3048 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Declaring color-scheme stops Chrome / in-app WebViews force-darkening the page.
+     Without it, auto-dark inverts the background but not the text, giving dark-on-dark. -->
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#ffffff">
+<title>Kevin Tran — Designer &amp; Developer</title>
+<meta name="description" content="Kevin Tran is a designer and developer in North County San Diego, leading design and web at Spigen.">
+
+<link rel="preload" href="assets/inter-variable.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/kevin-tran-portrait.jpg" as="image" fetchpriority="high">
+<!-- ---- preloads ----
+     Both of these used to be inline base64, which made them free to discover
+     and expensive to parse. Out on disk they are the other way round: cheap,
+     cacheable, shared with the case study — but the font is only found once
+     the stylesheet has been read, and the portrait once <main> has parsed.
+     These two lines put both requests in flight with the document instead.
+     crossorigin is not optional on the font even same-origin: font fetches
+     are CORS-mode, and without it the preload is discarded and fetched twice. -->
+
+<!-- Registered in the head rather than with the rest of the page's script,
+     for the same reason the case study does it: pagereveal fires before a
+     script at the foot of the body has run. This page does less with that
+     event than the case study does, but the reduced-motion opt-out has to be
+     reachable from both ends of a navigation. Everything is looked up inside
+     the handlers. -->
+<script>
+/* ---- page transition: which tile hands over to the case study ----
+   The browser will only morph two elements into each other if they carry the
+   same view-transition-name, and a name has to be unique in its document —
+   so exactly one tile can wear it, and only for the length of the navigation.
+   Which tile is decided by the URL being navigated to rather than by
+   listening for the click: the same handler then works for a back button, a
+   middle-click restored from history, or a link followed from anywhere else
+   on the page, none of which produce a click on the tile.
+
+   pageswap fires on the way out with the outgoing frame still on screen;
+   pagereveal fires on the way in, before the first paint. Their presence is
+   also the feature test — a browser without cross-document transitions has
+   neither event, and the navigation is a plain load. */
+(function(){
+  var PROJECT_LINKS = '.job__link';   /* the work tiles */
+
+  if (!('onpageswap' in window) || !('onpagereveal' in window)){
+  /* ---- fallback: no cross-document transitions in this browser ----
+     Reached only when the two events above are missing, which is the same test
+     as "this browser cannot do the morph". Firefox has no view transitions at
+     all; Safari got them in 18.2. Rather than let a project link swap pages on
+     the spot, the outgoing page is covered, the navigation happens behind the
+     cover, and the incoming page uncovers itself.
+     Scope is the same as the real thing: project links only. Everything else
+     navigates untouched. */
+  var doc = document.documentElement;
+  var KEY = 'fbveil';
+
+  function reduced(){ return matchMedia('(prefers-reduced-motion: reduce)').matches; }
+
+  /* Runs on the way in, before the body exists — which is the whole reason the
+     cover is a class on the root and not an element. The flag is read once and
+     cleared, so a stale one cannot black out a page later in the session. */
+  if (sessionStorage.getItem(KEY)){
+    sessionStorage.removeItem(KEY);
+    if (!reduced()){
+      doc.classList.add('fbv', 'fbv-on');
+      addEventListener('pageshow', function(){
+        /* Two frames: one for the class to land, one for the browser to have a
+           previous value to transition from. Uncovering on the first frame
+           just snaps. */
+        requestAnimationFrame(function(){
+          requestAnimationFrame(function(){ doc.classList.remove('fbv-on'); });
+        });
+      });
+    }
+  }
+
+  /* The cover is torn down on transitionend rather than a matching timeout, so
+     the CSS duration stays the single source of truth. The pseudoElement check
+     matters — this listener is on the root, which hears about every transition
+     on the page. */
+  doc.addEventListener('transitionend', function(ev){
+    if (ev.pseudoElement === '::before' && !doc.classList.contains('fbv-on')){
+      doc.classList.remove('fbv');
+    }
+  });
+
+  /* Coming back through bfcache restores the document exactly as it left —
+     mid-fade, cover still up. Without this the page sits behind a solid panel
+     until something else forces a repaint. */
+  addEventListener('pageshow', function(e){
+    if (e.persisted) doc.classList.remove('fbv', 'fbv-on');
+  });
+
+  addEventListener('click', function(e){
+    if (reduced()) return;
+    /* Anything that is not a plain left click is the browser's to handle: a
+       modifier or a middle click opens a new tab, and covering this page for a
+       navigation that is not happening here would leave it blacked out. */
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    var link = e.target.closest && e.target.closest(PROJECT_LINKS);
+    if (!link || link.target === '_blank' || link.origin !== location.origin) return;
+
+    e.preventDefault();
+    var href = link.href;
+    sessionStorage.setItem(KEY, '1');
+
+    doc.classList.add('fbv');
+    /* Forces the opacity:0 to be resolved before the class that raises it,
+       otherwise both land in the same style pass and there is no transition to
+       run — the cover appears instantly and the navigation looks like a flash. */
+    void doc.offsetWidth;
+    doc.classList.add('fbv-on');
+
+    var went = false;
+    function go(){
+      if (went) return;
+      went = true;
+      location.href = href;
+    }
+    /* Not { once:true }. This listener sits on the root, which hears every
+       transition on the page — a tile's hover zoom finishing first would spend
+       the one shot and leave the navigation waiting on the timeout below. It
+       removes itself only once it has seen the transition it is actually
+       waiting for. */
+    function onCovered(ev){
+      if (ev.pseudoElement !== '::before') return;
+      doc.removeEventListener('transitionend', onCovered);
+      go();
+    }
+    doc.addEventListener('transitionend', onCovered);
+    /* If the transition never reports — a background tab, a browser that drops
+       the event — the navigation still has to happen. Comfortably past the
+       220ms the cover takes. */
+    setTimeout(go, 500);
+  }, true);
+    return;
+  }
+
+
+  var tagged = null;
+
+  /* Queried at call time, not once at the top. This script runs in the head,
+     where the work grid does not exist yet — a list captured here would be
+     empty for the life of the page.
+     href on an anchor resolves to an absolute URL, which is the same form the
+     navigation entries report, so these compare directly — query string and
+     all, which is what tells one project apart from the next. */
+  function tileFor(url){
+    var links = document.querySelectorAll('.job__link');
+    for (var i = 0; i < links.length; i++){
+      if (links[i].href === url) return links[i];
+    }
+    return null;
+  }
+
+  /* A snapshot of an element scrolled off screen is empty, and an empty
+     snapshot morphs as a blank rectangle. Nothing to hand over — skip it and
+     let the plain cross-fade carry the navigation. */
+  function onScreen(el){
+    var r = el.getBoundingClientRect();
+    return r.bottom > 0 && r.top < innerHeight;
+  }
+
+  function tag(link, withTitle){
+    if (!link || !onScreen(link)) return;
+    var frame = link.querySelector('.img');
+    var title = link.querySelector('.job__label h3');
+    if (frame) frame.style.viewTransitionName = 'projectMedia';
+    /* The label only exists visually while the tile is hovered or focused.
+       On the way out that is a given — you were on the tile to click it — but
+       arriving back from a case study there is no pointer on anything, so the
+       title would morph into an invisible element. Checked rather than
+       assumed, because a tap on a touch screen does not always leave hover
+       behind either. */
+    if (withTitle && title && parseFloat(getComputedStyle(link.querySelector('.job__label')).opacity) > .5){
+      title.style.viewTransitionName = 'projectTitle';
+    }
+    tagged = link;
+  }
+
+  function untag(){
+    if (!tagged) return;
+    var frame = tagged.querySelector('.img');
+    var title = tagged.querySelector('.job__label h3');
+    if (frame) frame.style.viewTransitionName = '';
+    if (title) title.style.viewTransitionName = '';
+    tagged = null;
+  }
+
+  function reduced(){ return matchMedia('(prefers-reduced-motion: reduce)').matches; }
+
+  addEventListener('pageswap', function(e){
+    if (!e.viewTransition) return;
+    if (reduced()){ e.viewTransition.skipTransition(); return; }
+    var a = e.activation;
+    /* The transition belongs to project links and nothing else. @view-transition
+       opts this document into every same-origin navigation there is — it has no
+       per-link switch — so the narrowing happens here: anything whose
+       destination is not one of the work tiles gets the transition cancelled and
+       navigates plainly, as it did before any of this existed.
+       Traversals are cancelled with them. A back or forward button is not a
+       click on a project link, and treating it as one means animating a move
+       the person did not ask for in a direction they did not choose. */
+    if (!a || a.navigationType === 'traverse'){ e.viewTransition.skipTransition(); return; }
+    var tile = tileFor(a.entry.url);
+    if (!tile){ e.viewTransition.skipTransition(); return; }
+    tag(tile, true);
+    /* No cleanup: this document is on its way out. */
+  });
+
+  /* Arriving at the index is cancelled outright.
+     Coming back here is not a click on a project link, so by the rule above it
+     gets no transition — and that also settles a problem this document could
+     not have solved anyway. The browser takes the incoming snapshot as soon as
+     the stylesheet is done, which here is long before the work grid has parsed:
+     measured at the moment pagereveal fires, document.body has zero children
+     and scrollY is still 0. There would be no tile to name, and even once there
+     was, its coordinates are the top of an unscrolled document rather than
+     wherever the page is about to be restored to.
+     Cancelled here rather than trusting the outgoing page to have done it,
+     because a document on its way out is not something to rely on. */
+  addEventListener('pagereveal', function(e){
+    if (!e.viewTransition) return;
+    e.viewTransition.skipTransition();
+  });
+})();
+</script>
+
+<!--
+  images/ holds temporary art pulled from kevntrn.myportfolio.com.
+  portrait.jpg   <- STAND-IN. Small hero card, wants a photo of you.
+  about-temp.jpg <- STAND-IN. Also wants a photo of you.
+  Project sources are portrait 3:4 in 16:9 frames -> object-fit:contain.
+-->
+
+<script>
+/* Set the theme before first paint so there's no flash of the wrong mode. */
+(function(){
+  /* Light is the default. The OS preference is deliberately ignored — only an
+     explicit choice via the toggle is honoured, and it persists. */
+  var t;
+  try { t = localStorage.getItem('kt-theme'); } catch(e){}
+  document.documentElement.dataset.theme = (t === 'dark' || t === 'light') ? t : 'light';
+  document.documentElement.classList.add('js');
+})();
+</script>
+
+<style>
+/* Inter, self-hosted, one variable face covering the whole weight range where
+   Poppins needed five static cuts — 53KB against their 247KB, subset to Latin-1
+   plus the three non-ASCII characters the page actually sets. Both axes survive
+   the subset: wght so any weight is reachable, and opsz, which is why the
+   optical-sizing line below matters — Inter shifts its own proportions between
+   14 and 32, tightening spacing and shortening ascenders as type gets larger. */
+@font-face{
+  font-family:"Inter";
+  src:url(assets/inter-variable.woff2) format("woff2");
+  font-weight:100 900;font-style:normal;font-display:swap;
+}
+
+/* ==========================================================
+   TOKENS — semantic, not literal, so both themes can swap cleanly
+   ========================================================== */
+:root{
+  --display:"Inter",system-ui,sans-serif;
+  --sans:"Inter",system-ui,sans-serif;
+
+  /* Measured off formandfun.co, which runs its whole geometry in vw with no
+     container cap: 1vw of gutter (14.4px at 1440, 10.24px at 1024 — the ratio
+     holds exactly, which is how you can tell it is vw and not a clamp), and 4vw
+     once it drops to a phone (15.6px at 390). The floor is mine: at 1vw an
+     800px window gives an 8px margin and the type sits on the window edge. */
+  --gut:max(1vw,.75rem);
+  /* No cap. Their layout runs edge to edge at every width — the 1500px cap here
+     was the single biggest reason the two pages read differently above 1500. */
+  --max:none;
+  /* 8px flat, not fluid. Their radius is the one value in the system that does
+     not scale with the viewport. */
+  --r:8px;
+
+  --fast:220ms;
+  --mid:520ms;
+  --slow:900ms;
+  --ease:cubic-bezier(.16,1,.3,1);
+  --easeSoft:cubic-bezier(.33,1,.68,1);   /* measured off the reference */
+
+  /* ---- hero entrance ----
+     --hero-hold is dead air before anything moves, so the page doesn't start
+     mid-animation the instant it paints. Every part of the entrance is offset
+     by it, so raising or lowering it keeps the choreography intact.
+     --hero-type-step is the gap between letters, read in JS. */
+  --hero-hold:460ms;
+  --hero-type-travel:720ms;
+  --hero-type-step:52ms;
+}
+
+/* ---------- LIGHT ---------- */
+html[data-theme="light"]{
+  /* "only" is the strong opt-out. Plain `light` still lets Chrome and some
+     in-app WebViews auto-darken, which inverts the background but leaves
+     explicit text colours alone -> dark-on-dark. */
+  color-scheme:only light;
+  background-color:#ffffff;
+  --bg:#ffffff;          /* page ground — pure white */
+  --surface:#f6f6f4;     /* raised panels, just off white */
+  --text:#111214;
+  --muted:#5f6266;
+  --letterbox:#efefec;   /* image frame fill */
+  --accent:#1f45ff;
+  --chrome-bg:rgba(17,18,20,.93);   /* theme toggle, back-to-top */
+  --chrome-fg:#ffffff;
+  --chrome-dim:rgba(255,255,255,.64);
+  --invert-bg:#111214;   /* contact block */
+  --invert-fg:#ffffff;
+  --invert-dim:rgba(255,255,255,.68);
+  --litOff:#d6d6d2;      /* unlit letters in the statement */
+  /* Was #ffffff, which worked while this section sat on --surface. The section
+     background was removed, so the panel became white-on-white and the hover
+     state was invisible. Sits between --surface and --letterbox: clearly off
+     the white ground, still distinct from the #efefec plate behind it. */
+  --capsPanel:#f1f1ef;   /* capability column, hovered */
+  --mqDim:#e5e5e5;       /* marquee band — the reference's exact value */
+}
+
+/* ---------- DARK ---------- */
+html[data-theme="dark"]{
+  color-scheme:only dark;
+  background-color:#0e0f11;
+  --bg:#0e0f11;
+  --surface:#16181b;
+  --text:#ffffff;        /* pure white text */
+  --muted:#a0a3a8;
+  --letterbox:#1e2024;
+  --accent:#7a90ff;      /* lifted so it clears contrast on a dark ground */
+  --chrome-bg:rgba(255,255,255,.94);
+  --chrome-fg:#0e0f11;
+  --chrome-dim:rgba(14,15,17,.62);
+  --invert-bg:#000000;
+  --invert-fg:#ffffff;
+  --invert-dim:rgba(255,255,255,.62);
+  --litOff:#33363d;
+  /* Lighter than --surface here, where the light theme's panel is lighter
+     than its surface too, so the column lifts in both rather than lifting in
+     one and recessing in the other. */
+  --capsPanel:#212429;
+  /* Same distance off the dark ground as #e5e5e5 is off white, so the band
+     stays texture in both themes instead of glowing in one. */
+  --mqDim:#25282d;
+}
+
+/* Their phone gutter widens to 4vw where the desktop one is 1vw. */
+@media (max-width:779.98px){:root{--gut:max(4vw,1rem)}}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;background:var(--bg)}
+body{
+  margin:0;background:var(--bg);color:var(--text);
+  font-family:var(--sans);
+  font-optical-sizing:auto;
+  font-size:clamp(1rem,.35vw + .95rem,1.0625rem);
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+  transition:background 320ms linear,color 320ms linear;
+}
+img{max-width:100%;display:block}
+/* ---- video range fix ----
+   The big clips (the hero, and the full-bleed plate at the top of the shots
+   grid) were painting about 16 levels lighter than the identical still sitting
+   next to them: black floor at ~25/255 instead of ~10, which reads as washed.
+   Measured against the source, the on-screen picture fits 0.93*file + 19 —
+   the signature of limited-range (16-235) YUV never being expanded to 0-255.
+   Chrome hands a large enough video straight to a hardware overlay plane,
+   which skips that expansion; a small one stays in the composited path and
+   converts correctly, which is why only the big ones looked wrong. A filter on
+   the element disqualifies it from the overlay, so every clip takes the same
+   path as its poster. It is a no-op visually — the value is the smallest one
+   that will not be folded away as an identity filter. */
+video{filter:saturate(1.0001)}
+
+a{color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:4px}
+
+.shell{max-width:var(--max);margin-inline:auto;padding-inline:var(--gut)}
+.sec{padding-block:clamp(4.5rem,11vw,10rem)}
+
+/* One display face for every headline-level moment — hero, section heads,
+   project titles, statement. Body and UI stay in the sans. */
+h2,h3{
+  font-family:var(--display);
+  font-weight:400;
+  letter-spacing:-.032em;line-height:1.04;margin:0;
+}
+h2{font-size:clamp(2rem,5vw,3.75rem)}
+h3{font-size:clamp(1.375rem,2.6vw,2.125rem);letter-spacing:-.022em}
+
+.lede{
+  font-size:clamp(1.0625rem,.6vw + .95rem,1.3125rem);
+  line-height:1.55;color:var(--muted);margin:1.25rem 0 0;max-width:38ch;
+}
+.meta{
+  font-family:var(--display);font-weight:400;
+  font-size:.75rem;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--muted);margin:0;
+}
+
+/* ---------- buttons ---------- */
+.btns{display:flex;flex-wrap:wrap;gap:.75rem;margin-top:2rem}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;
+  font:inherit;font-size:.9375rem;font-weight:400;text-decoration:none;
+  border-radius:99px;padding:.8rem 1.65rem;border:1px solid transparent;
+  transition:background var(--fast) var(--ease),color var(--fast) var(--ease),
+             border-color var(--fast) var(--ease),transform var(--fast) var(--ease);
+}
+/* Hover: the right edge extends and the arrow slides into the space it opens. */
+.btn__arrow{
+  width:0;margin-left:0;overflow:hidden;flex:none;
+  display:inline-flex;align-items:center;
+  transition:width var(--mid) var(--ease),margin-left var(--mid) var(--ease);
+}
+.btn__arrow svg{
+  flex:none;opacity:0;transform:translateX(-8px);
+  transition:opacity var(--fast) var(--ease),transform var(--mid) var(--ease);
+}
+.btn:hover .btn__arrow,.btn:focus-visible .btn__arrow{width:17px;margin-left:.55rem}
+.btn:hover .btn__arrow svg,.btn:focus-visible .btn__arrow svg{opacity:1;transform:none}
+@media (prefers-reduced-motion:reduce){
+  .btn:hover .btn__arrow,.btn:focus-visible .btn__arrow{width:17px;margin-left:.55rem}
+}
+.btn:active{transform:scale(.98)}
+/* Hover shifts shade, not hue. Mixing each button's own fill toward the page
+   ground keeps the change inside the colour it already is, and because both
+   halves are tokens it inverts correctly in dark without a second rule:
+   near-black lifts to charcoal in light, white dims to off-white in dark. */
+.btn--fill{background:var(--text);color:var(--bg)}
+.btn--fill:hover{background:color-mix(in srgb,var(--text) 84%,var(--bg))}
+.btn--ghost{border-color:color-mix(in srgb,var(--text) 22%,transparent)}
+/* The outline deepens and picks up a faint wash of the same colour rather than
+   inverting to a solid — an invert is the loudest move on the page for what is
+   the secondary of two buttons sitting side by side. */
+.btn--ghost:hover{
+  border-color:color-mix(in srgb,var(--text) 48%,transparent);
+  background:color-mix(in srgb,var(--text) 7%,transparent);
+}
+
+.tlink{
+  display:inline-flex;align-items:center;gap:.5rem;
+  font-size:.9375rem;font-weight:400;text-decoration:none;margin-top:2.5rem;
+  transition:color var(--fast) var(--ease);
+}
+.tlink svg{transition:transform var(--mid) var(--ease)}
+.tlink:hover{color:var(--accent)}
+.tlink:hover svg{transform:translateX(6px)}
+
+.img{position:relative;overflow:hidden;background:var(--letterbox);border-radius:var(--r)}
+/* :is(img,video) throughout — the Rengar tile is a clip and everything the
+   grid does to a tile (the cover fit, the hover zoom, the reduced-motion
+   override) has to reach it too, or it sits unzoomed and letterboxed next to
+   nine that behave. */
+.img > :is(img,video){width:100%;height:100%;object-fit:cover}
+
+/* ==========================================================
+   THEME TOGGLE — top right
+   ========================================================== */
+.theme{
+  position:fixed;z-index:95;
+  top:clamp(.75rem,2vw,1.5rem);right:clamp(1rem,3vw,2rem);
+  width:44px;height:44px;border-radius:99px;
+  display:grid;place-items:center;cursor:pointer;
+  background:var(--chrome-bg);color:var(--chrome-fg);
+  border:0;padding:0;
+  backdrop-filter:blur(14px) saturate(1.4);
+  box-shadow:0 6px 28px rgba(0,0,0,.16);
+  transition:background 320ms linear,transform var(--fast) var(--ease);
+}
+.theme:hover{transform:scale(1.06)}
+.theme:active{transform:scale(.95)}
+.theme svg{position:absolute;width:19px;height:19px;transition:opacity var(--mid) var(--ease),transform var(--mid) var(--ease)}
+.theme .sun{opacity:0;transform:rotate(-70deg) scale(.5)}
+.theme .moon{opacity:1;transform:none}
+html[data-theme="dark"] .theme .sun{opacity:1;transform:none}
+html[data-theme="dark"] .theme .moon{opacity:0;transform:rotate(70deg) scale(.5)}
+
+/* ==========================================================
+   BACK TO TOP — mirrors the theme toggle, bottom right
+   ========================================================== */
+.totop{
+  position:fixed;z-index:95;
+  right:clamp(1rem,3vw,2rem);
+  bottom:calc(clamp(1rem,3vw,2rem) + env(safe-area-inset-bottom, 0px));
+  width:46px;height:46px;border-radius:99px;
+  display:grid;place-items:center;cursor:pointer;
+  background:var(--chrome-bg);color:var(--chrome-fg);
+  border:0;padding:0;
+  backdrop-filter:blur(14px) saturate(1.4);
+  box-shadow:0 6px 28px rgba(0,0,0,.16);
+  /* hidden state also leaves the tab order, via visibility */
+  opacity:0;visibility:hidden;transform:translateY(14px) scale(.92);
+  transition:opacity var(--mid) var(--ease),transform var(--mid) var(--ease),
+             background 320ms linear,visibility 0s linear var(--mid);
+}
+.totop[data-show="true"]{
+  opacity:1;visibility:visible;transform:none;
+  transition:opacity var(--mid) var(--ease),transform var(--mid) var(--ease),
+             background 320ms linear,visibility 0s linear 0s;
+}
+.totop[data-show="true"]:hover{transform:translateY(-3px)}
+.totop[data-show="true"]:active{transform:translateY(-1px) scale(.96)}
+.totop svg{transition:transform var(--mid) var(--ease)}
+.totop[data-show="true"]:hover svg{transform:translateY(-2px)}
+
+/* ==========================================================
+   HERO — type is the whole event
+   ========================================================== */
+/* The hero gets a 220svh track, and the hero is pinned across the first 120svh
+   of it (trackH minus one viewport). Inside that pinned window:
+     0    – 0.50vh   the headline rides out letter by letter
+     0    – 0.28vh   the corner marks lift and fade
+     0    – 0.75vh   the portrait rises to centre and grows to full bleed
+     0.40 – 0.80vh   the copy rises beside it, starting while DESIGNER is
+                     still clearing its mask
+     0.75 – 0.95vh   the portrait holds at full bleed — dead scroll on purpose,
+                     so the arrival is allowed to land before anything moves
+                     again, and the copy is read against the full frame
+     0.95 – 1.17vh   it eases back off the viewport edge onto the page gutter,
+                     ending as an inset card on the same margin as the sections
+                     below it, corners rounding back to --r
+     1.17 – 1.20vh   a beat at rest before the pin lets go
+   Past 1.20vh the pin releases and the whole composition scrolls away normally,
+   which is what keeps the statement section from ever overlapping it.
+   Every phase above is a fraction of the viewport read off raw scroll, not of
+   the pin span, so this height moves only where the pin lets go — the animation
+   itself is untouched by it. The track floor is wherever the last phase
+   finishes plus one viewport: at 1.17vh that floor is 217svh. Pinning is done
+   in JS: sticky has no scrollport inside the fixed, transformed smooth-scroll
+   wrapper. */
+.heroTrack{position:relative;z-index:0;height:auto}
+/* The 240svh above only applies where the panels are overlaid — see ABOUT. In
+   flow the track is just the hero plus the panel beneath it. */
+.hero{
+  height:100svh;display:flex;flex-direction:column;justify-content:center;
+  padding-block:clamp(5.5rem,11vw,8rem) clamp(1.75rem,4vw,3rem);
+  position:relative;overflow:hidden;
+  will-change:transform;
+}
+/* type, portrait and corner marks all sit on the hero's own layer */
+.hero > .hero__type,
+.hero > .hero__cardWrap,
+.hero > .hero__corners{position:relative;z-index:1}
+
+/* Short-but-wide laptops (1366x768, 1280x800) have the tightest vertical
+   budget. Trim the padding and the portrait there so the headline can keep
+   its scale instead of the height cap crushing it. */
+@media (min-width:768px) and (max-height:840px){
+  .hero{padding-block:clamp(4.25rem,8vw,5.5rem) clamp(1rem,2.5vw,1.75rem)}
+  .hero__cardWrap{width:clamp(84px,8vw,110px);margin-top:clamp(.75rem,2vw,1.25rem)}
+  .hero__corners{padding-top:clamp(1.25rem,3vw,2rem)}
+}
+
+.hero__corners{position:relative;z-index:1}
+
+.hero__type{
+  margin:0;text-align:center;font-family:var(--display);
+  text-transform:uppercase;line-height:.80;letter-spacing:-.045em;
+  /* Sized so DESIGNER — the longer word — fits the measure. .mask uses
+     overflow:hidden for the reveal, which clips horizontally too, so anything
+     wider than the container loses letters off both sides.
+     The 21vh term keeps the corner marks above the fold on wide-but-short
+     laptops (1366x768, 1280x800). */
+  font-size:min(15.5vw,14.8rem,22vh);
+}
+/* Inter is variable on weight and optical size but has no width axis either, so
+   the two lines still cannot be optically matched. DESIGNER runs wider than
+   GRAPHIC; centred, that reads as a normal rag. */
+.hero__type .l1{display:block;font-weight:400;will-change:transform,opacity}
+.hero__type .l2{display:block;font-weight:400;will-change:transform,opacity}
+.hero__type .mask{display:block;overflow:hidden;padding-block:.02em}
+.hero__type .mask > span{display:block;white-space:nowrap}
+/* Letters are split into .ch spans by JS and ride up out of the mask one at a
+   time, the same mechanic the section headings use. Each letter's delay is set
+   inline as calc(var(--hero-hold) + n), so --hero-hold below shifts the whole
+   entrance — headline, portrait and corner marks — as one block.
+   Falls back to a plain visible heading if JS never runs: the hidden state
+   comes from `html.js .ch`, and the split only happens under the same flag. */
+.hero__type .ch{vertical-align:top}
+.hero.ready .hero__type .ch{transform:none;transition:transform var(--hero-type-travel) var(--ease)}
+/* Once the entrance has landed the letters are driven per-frame from scroll
+   position on the way out, so the transition has to come off — same reason the
+   portrait can't keep one. Left on, every letter would trail the finger by
+   --hero-type-travel plus its own stagger delay. */
+.hero.scrub .hero__type .ch{transition:none}
+
+/* The wrapper owns the one-shot entrance and therefore the transition.
+   The card itself is driven per-frame by scroll and must NOT be transitioned,
+   or it lags ~900ms behind and appears to jump. */
+.hero__cardWrap{
+  width:clamp(96px,10.5vw,140px);
+  margin:clamp(1.25rem,3vw,2.25rem) auto 0;
+  opacity:0;transform:translateY(24px);
+}
+.hero.ready .hero__cardWrap{
+  opacity:1;transform:none;
+  transition:opacity var(--slow) var(--ease) calc(var(--hero-hold) + 420ms),
+              transform var(--slow) var(--ease) calc(var(--hero-hold) + 420ms);
+}
+.hero__card{
+  /* A fixed vertical frame, not the photograph's own shape. The file is
+     1928x815; letting it set the frame made the portrait a letterbox strip. The
+     picture is cropped to this 3:4 window at rest and the crop opens back up as
+     the frame expands — see the fill scale in the loop. */
+  width:100%;aspect-ratio:3/4;
+  position:relative;
+  border-radius:10px;overflow:hidden;background:var(--letterbox);
+  will-change:transform;
+}
+/* Not object-fit:cover. Cover crops against the *layout* box, and the layout box
+   never changes here — the growth is a transform — so a cover crop would be
+   locked to the resting 3:4 window and the full-bleed end state would be a
+   viewport-shaped hole punched in the middle of that crop, roughly a third of
+   the photograph's width. Instead the image keeps its own proportions and is
+   sized and centred by JS, so it covers whatever shape the frame currently is:
+   a 3:4 crop at rest, a true viewport cover at full bleed. */
+.hero__card img{
+  position:absolute;top:50%;left:50%;
+  width:auto;height:100%;max-width:none;
+  transform:translate(-50%,-50%);
+  will-change:transform;
+}
+
+/* Wherever the copy sits in flow rather than beside the portrait, the portrait
+   has no growth to perform — there is no empty middle for it to expand into.
+   So it is laid out at full size from the start instead of being scaled up on
+   scroll. 42svh matches the 0.56-of-hero-height the scaled version targeted,
+   and 100% caps it at the shell measure so it never touches the gutters.
+   This selector is the exact complement of the overlay media query below. */
+@media (max-width:767.98px),(prefers-reduced-motion:reduce){
+  .hero__cardWrap{width:min(100%,42svh)}
+}
+/* The headline is sized off viewport width, so from ~900px up it starts taking
+   the vertical budget the portrait wants: at 1149x700 the two lines alone are
+   ~285px. 26svh is the largest cap that still leaves the corner marks inside
+   the hero at every width and height in this band — measured, not guessed. */
+
+
+.hero__corners{
+  will-change:transform,opacity;
+  display:flex;justify-content:space-between;align-items:flex-end;gap:1.5rem;
+  margin-top:auto;padding-top:clamp(2rem,5vw,3.5rem);
+}
+.hero__mark{
+  font-family:var(--display);font-weight:400;
+  font-size:clamp(1.5rem,3.4vw,2.75rem);letter-spacing:-.03em;margin:0;line-height:1;
+}
+.hero__corners > *{opacity:0;transform:translateY(14px)}
+.hero.ready .hero__corners > *{
+  opacity:1;transform:none;
+  transition:opacity var(--slow) var(--ease) calc(var(--hero-hold) + 620ms),
+              transform var(--slow) var(--ease) calc(var(--hero-hold) + 620ms);
+}
+
+/* ---- phones: close the gap between the portrait and the copy ----
+   The hero is a full screen and the portrait sat in the middle of it, so the
+   copy below started roughly a third of a viewport clear of the photograph even
+   with the panel padding at zero. Two moves, no change to the height:
+     1. The free height moves from below the group to above it, so the portrait
+        finishes near the bottom of the first screen instead of the middle. Type
+        and portrait stay together — the space opens over the headline, not
+        between them.
+     2. The corner marks come out of flow. In flow they claimed that free height
+        for themselves, which is what held the portrait up. Pinned to the hero's
+        bottom edge they keep the same position on screen as before, and the
+        scroll lift-and-fade still applies: the JS writes a transform, which is
+        indifferent to how the element is positioned.
+   The bottom padding is the clearance between the portrait and those marks, so
+   it is the number to change if they ever crowd each other. */
+/* Runs to 1149.98px — the exact complement of the overlay query — rather than
+   stopping at 760px. Above 760 the marks were still in flow, and their
+   margin-top:auto claimed every spare pixel of the hero for itself. That parked
+   the portrait high and left a band of nothing beneath it, and because the
+   marks fade out on the first quarter-viewport of scroll, by the time the intro
+   copy was on screen the band was simply white. */
+@media (max-width:767.98px){
+  .hero{padding-bottom:clamp(4.5rem,13vw,5.25rem)}
+  /* An auto margin rather than justify-content:flex-end. Both put the group at
+     the bottom when there is height to spare, but an auto margin resolves to 0
+     when there is not, where flex-end keeps pushing and drives the headline up
+     under the fixed chrome — visible at 320x568. */
+  .hero__type{margin-top:auto}
+  /* .hero > .hero__corners sets position:relative further up; matching that
+     specificity here is what makes the override land. */
+  .hero > .hero__corners{
+    position:absolute;left:var(--gut);right:var(--gut);
+    bottom:clamp(.9rem,3.5vw,1.25rem);
+    margin-top:0;padding-top:0;
+  }
+}
+
+/* ==========================================================
+   ABOUT — two panels either side of the portrait
+   ========================================================== */
+/* Written flow-first. The default is an ordinary panel that slides up over the
+   hero, which is what narrow screens get and what the reduced-motion path gets;
+   the overlaid two-column version is an enhancement layered on at the bottom of
+   this block, for viewports wide enough to have room beside a 3/4 portrait.
+   Doing it this way round means reduced motion cannot end up with copy sitting
+   on top of a full-size headline, and the JS only has to ask which of the two
+   is live rather than re-testing the breakpoint itself. */
+.heroFlank{
+  position:relative;z-index:1;
+  /* Asymmetric on purpose. The top gap is a caption's distance from the portrait
+     above it, so the two read as one unit; the bottom keeps the full section
+     rhythm before the statement. No surface and no radii — as a raised panel it
+     read as a module that happened to land beneath the photograph rather than as
+     writing about it, and the overlaid layout below has never had one either. */
+  padding-block:clamp(1.5rem,5vw,2.25rem) clamp(4rem,12vw,7rem);
+  padding-inline:var(--gut);
+  max-width:var(--max);margin-inline:auto;
+}
+/* The reveal: the same 64px rise and fade every [data-el] on the page uses, but
+   driven from JS in both layouts — off the element's own position on screen when
+   it is in flow, and off the hero's scroll progress when it is pinned, because a
+   pinned element's page position no longer tracks the screen. That is also why
+   these carry .flankEl rather than [data-el]: two systems writing one transform
+   would fight over it. */
+.flankEl{opacity:0;transform:translate3d(0,64px,0);will-change:transform,opacity}
+html:not(.js) .flankEl{opacity:1;transform:none}
+
+.flankCopy p{
+  margin:1.25rem 0 0;
+  font-size:clamp(1rem,.45vw + .9rem,1.1875rem);
+  line-height:1.55;color:var(--muted);max-width:38ch;
+}
+.flankCopy .btns{margin-top:1.75rem}
+
+/* ---- the overlay ----
+   1150px is where a readable column beside the grown portrait stops having to
+   fight for the width: the portrait alone takes 0.42 of the viewport height,
+   so at a 900px-tall window that is ~378px out of the middle before the copy
+   gets a pixel. --cardW carries its real measured width over from JS, so the
+   middle column reserves exactly that and no more. The third track is left
+   empty — the copy all sits to the left of the portrait. */
+@media (min-width:768px) and (prefers-reduced-motion:no-preference){
+  .heroTrack{height:220svh}
+
+  /* The hero carries .shell, so it was capped at --max and its overflow:hidden
+     clipped the portrait — on any window wider than the cap the grown image sat
+     inside two bars of page background. The box spans the full width so the clip
+     happens at the viewport edge.
+     This used to add a centring term, calc(var(--gut) + max(0px, (100% - var(--max)) / 2)),
+     to put the content box back where the 1500px cap had it. --max is none now,
+     so that calc was invalid at computed-value time — the whole declaration was
+     thrown away and the padding fell to 0, which is why the corner marks were
+     sitting flush against the window edge. With no cap there is nothing to
+     centre against, so the gutter is the whole answer. */
+  .hero{
+    max-width:none;
+    padding-inline:var(--gut);
+  }
+  .heroFlank{
+    /* The measure for the copy panel. The outer tracks are equal, and a panel
+       narrower than its track would leave a hole, so capping at --flankW and
+       pushing it inwards puts the gap between copy and portrait at exactly the
+       column-gap and nothing else. */
+    --flankW:26rem;
+    position:absolute;top:0;left:0;right:0;height:100svh;z-index:2;
+    display:grid;align-items:center;
+    grid-template-columns:minmax(0,1fr) var(--cardW,42svh) minmax(0,1fr);
+    column-gap:clamp(1.5rem,3.5vw,3.5rem);
+    max-width:none;padding-block:0;
+    /* the side columns shrink to the copy's width on narrower desktops, so the
+       panel keeps its own inset at every overlay width rather than the page's
+       hairline gutter */
+    padding-inline:clamp(1.5rem,4vw,3rem);box-sizing:border-box;
+    /* the container has to ignore the pointer so the middle column never eats
+       clicks; the panels themselves take it back */
+    pointer-events:none;
+  }
+  .heroFlank > *{pointer-events:auto;min-width:0;align-self:center}
+  .flankCopy{width:min(100%,var(--flankW));grid-column:1;justify-self:end}
+  /* Still the enlarged size from when the headline stood alone in this column.
+     It now shares the column with the copy and the CTAs, so if it reads too
+     heavy, clamp(1.9rem,3vw,2.875rem) is where it sat before. */
+  .flankCopy h2{font-size:clamp(2.5rem,4vw,4rem);line-height:1.02}
+  .flankCopy h2 + p{margin-top:1.6rem}
+  /* the block is already capped at --flankW, so a second cap here would only
+     re-open the gap toward the portrait */
+  .flankCopy p{max-width:none}
+
+  /* ---- copy over the full-bleed portrait ----
+     Scoped to the overlay query on purpose. Below 1150px the flank drops into
+     flow beneath the hero on the page background, where white would be white on
+     white. The copy only reveals from 0.50vh, by which point the portrait is
+     already at 96% of its fill scale, so this never lands on the light ground.
+     The buttons invert with it — a near-black pill and a --text hairline border
+     both disappear into a dark photograph. */
+  .flankCopy h2{color:#fff}
+  .flankCopy p{color:rgba(255,255,255,.86)}
+  .flankCopy .btn--fill{background:#fff;color:#111214}
+  .flankCopy .btn--fill:hover{background:color-mix(in srgb,#fff 84%,transparent)}
+  .flankCopy .btn--ghost{border-color:rgba(255,255,255,.5);color:#fff}
+  .flankCopy .btn--ghost:hover{
+    border-color:rgba(255,255,255,.85);
+    background:rgba(255,255,255,.12);
+  }
+
+  /* The scroll target for the About link, parked at the point where both
+     panels have finished arriving so the link lands on the composition rather
+     than at the top of the pin. In flow it is an inert 1px box in the margin. */
+  /* Sits just past the settle finishing (1.17vh) and well short of the pin
+     releasing (1.20vh), so the About link lands on the composition in its
+     final state — copy in, card at rest on the gutter — rather than at the top
+     of the pin or on the hero already on its way out. It has to move whenever
+     the settle or the track height does. */
+  .aboutAnchor{position:absolute;top:118svh;left:0;width:1px;height:1px}
+}
+/* ==========================================================
+   SCROLL-LIT STATEMENT
+   ========================================================== */
+/* The track is taller than the viewport; .lit__pin is held in place across the
+   difference, and that travel is what drives the word lighting. The text is
+   already fully on screen by the time the pin engages, so the colour change
+   only starts once the section has settled. */
+/* An ordinary section in the flow. This used to be a 260svh track with a 100svh
+   pinned child: the page stopped moving, the statement was held still, and the
+   words lit as you burned through two and a half screens of scroll. It read as a
+   forced hold. The reference just sets the statement in the flow and lets you
+   scroll past it, so that is what this does now — the section is as tall as its
+   own content plus padding, and the fill is driven by where the block sits on
+   screen rather than by progress through a track. */
+.lit{
+  position:relative;z-index:1;
+  /* Deliberately wider than the .sec rhythm the rest of the page runs on. That
+     rhythm is measured against body copy and section headings; this block is a
+     single sentence at 4.4vw, and the same 160px that reads as generous around
+     a heading reads as tight against type this size — the statement was being
+     squeezed between a full-bleed image above it and a display heading below.
+     Half again as much, which puts roughly one line of its own type on each
+     side. */
+  padding-block:clamp(6.5rem,16vw,15rem);
+}
+.lit__pin{display:block}
+/* Containing block for the absolutely positioned label. */
+.lit__pin > .shell{position:relative;width:100%}
+/* Measured off the reference's statement block at 1440: 63.36px on a 1411px
+   container is 4.4vw, its line-height is exactly 1.0, and its tracking is
+   -1.44px, or -0.023em. The 26ch measure is gone — theirs runs the full
+   container width, which is what makes it read as a statement rather than a
+   pull quote. The floor is mine: 4.4vw on a phone is 17px. */
+.lit p[data-lit-text]{
+  font-family:var(--display);font-weight:400;
+  /* Larger than the reference's 4.4vw: the pinned section gives the sentence a
+     full viewport to itself, and at that size it left most of it empty. 6.6vw
+     fills the measure over four lines at most widths; balance keeps the rag even. */
+  font-size:max(6.6vw,1.9rem);
+  letter-spacing:-.023em;line-height:1;margin:0;max-width:none;
+  /* The copy is cut to fill three lines evenly, but where the browser breaks it
+     is not perfectly scale-invariant: across roughly 1250-1295 the first line
+     could just fit one more word, and the rag went from 87/86/89 to 100/90/70.
+     Balance re-optimises the break points instead of filling each line greedily.
+     Measured, it repairs exactly that band — spread 30 down to 2 — and leaves
+     every other width byte-identical, so it is a fix rather than a restyle. */
+  text-wrap:balance;
+  /* Tracking is applied after every character including the space, so -.023em
+     takes that much off each word gap as well as each letter gap. Measured, the
+     gaps came back at 14.5px on a 63px setting — 0.23em, tight enough that
+     pairs like "design isn't" closed up. This puts back exactly what the
+     tracking removed rather than adding space of its own. */
+  word-spacing:.023em;
+}
+/* The first line starts 25% in, held open for the label at the left, while every
+   line below sits on the gutter.
+   Not text-indent. The words here are inline-blocks so each letter can be
+   coloured independently, and a percentage text-indent on a run of inline-blocks
+   wrecks the word spacing in Chromium — measured, the gaps between the last
+   glyph of one word and the first of the next went from a flat 16px to anywhere
+   between -13.8 and +34.8, which is why "design isn\'t" closed up while "part
+   people" fell apart. An empty leading inline-block indents the first line and
+   leaves the spacing alone. The reference reports a computed text-indent of 0
+   too, so it is doing something equivalent. */
+.lit p[data-lit-text]::before{content:"";display:inline-block;width:25%}
+/* The section label, set at the same 1vw as their body copy and sitting on the
+   first line of the statement rather than above it. */
+.lit .lit__eyebrow{
+  position:absolute;left:var(--gut);top:0;
+  margin:0;font-size:max(1vw,.8125rem);line-height:1.3;
+  color:var(--muted);
+}
+@media (max-width:760px){
+  /* A quarter of a narrow column is most of a line, so the indent goes and the
+     label sits above the statement instead of beside it. */
+  .lit p[data-lit-text]::before{display:none}
+  .lit .lit__eyebrow{position:static;margin-bottom:1.25rem}
+}
+/* The word is only a wrapper now: inline-block so it cannot break mid-word,
+   with no colour of its own. Each letter carries the transition. */
+.lit w{display:inline-block}
+/* Each letter carries its own progress, 0 to 1, and mixes between the two
+   colours continuously — so the boundary is a soft band of letters mid-mix
+   rather than a hard cut.
+   Note this is NOT the 260ms crossfade that used to be here. That was a CSS
+   transition, so its softness was temporal: the blur lagged the scroll, smeared
+   further the faster you moved, and could not scrub backwards cleanly. This
+   softness is spatial. The gradient's width is a fixed number of letters, it is
+   pinned to scroll position rather than to a clock, and it reverses exactly as
+   it plays. Mixing in oklab keeps the midpoints from going muddy the way sRGB
+   interpolation does between a warm grey and near-black. */
+.lit c{color:color-mix(in oklab, var(--text) calc(var(--p, 0) * 100%), var(--litOff))}
+
+/* ==========================================================
+   WORK — gallery grid
+   ========================================================== */
+/* Two across, stepping down to one on phones. Four projects plus two
+   placeholders fill three rows; a third column would leave the last row
+   ragged again. */
+/* Sized to the statement paragraph: max(4.4vw,1.75rem), .9 leading, -.03em.
+   Set as written rather than uppercased — the caps came in with the marquee
+   band, which needed them to match its setting, and the band is gone.
+   The margin used to be zeroed to hold this flush against that band; with it
+   gone the bottom margin carries the gap the band used to supply, so the grid
+   below keeps its measured distance. */
+/* Every section head carries the same gap to the content under it. */
+.secHead{margin:0 0 clamp(2rem,4vw,3.25rem)}
+/* One setting for every section head — sized to the statement paragraph. This
+   used to be declared once per section, which is how Accomplishments ended up
+   on the base h2 clamp and a few px off the other two. */
+.secHead > h2{
+  font-size:max(4.4vw,1.75rem);line-height:.9;letter-spacing:-.03em;
+  margin:0;
+}
+/* One small-label role, shared by both section heads and matching the
+   statement's eyebrow, so they read as one thing rather than three. */
+.secHead__tag{
+  margin:0;font-size:max(1vw,.8125rem);
+  color:var(--muted);
+  line-height:.9;
+}
+/* --row: heading left, tag right, sat on the heading's baseline. Not
+   align-items:baseline — .ln carries overflow:hidden for the reveal mask, and
+   an overflow container does not hand its text baseline up to the flex line, so
+   the tag would align to the mask's bottom edge instead of the glyphs. */
+.secHead--row{
+  display:flex;align-items:flex-end;justify-content:space-between;
+  gap:1rem 2rem;flex-wrap:wrap;
+}
+/* Both boxes share .9 leading, so each holds its baseline the same fraction
+   above its bottom edge: measured on this face that distance is .078em.
+   flex-end lines the two box bottoms up, so lifting the tag by .078 of the size
+   difference lands the two baselines together, and it holds at both ends of the
+   clamps rather than only at one width. */
+.secHead--row > .secHead__tag{
+  padding-bottom:calc(.078 * (max(4.4vw,1.75rem) - max(1vw,.8125rem)));
+}
+/* --stack: tag above the heading. The gap is set in the tag's own em rather
+   than the heading's, so the label stays tucked to the head it labels instead
+   of drifting as the display size scales.
+   flow-root, not block: .ln ends on margin-bottom:-.14em (the pair that stops
+   the mask clipping descenders), and in a plain block that negative margin
+   collapses up through the h2 and out into this element's own bottom margin —
+   measured, it ate 8.9px and left this head sitting 43px off its grid where the
+   work head sits 52px off. A block formatting context keeps it contained.
+   The --row head never had the bug: flex items do not collapse margins. */
+.secHead--stack{display:flow-root}
+.secHead--stack > .secHead__tag{margin-bottom:1.15em}
+
+.jobs{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:1vw;
+}
+@media (min-width:640px){
+
+.jobs{grid-template-columns:repeat(2,minmax(0,1fr))} }
+
+/* Placeholder cells holding the third row open until there is real work for it.
+   Plain articles, not links: there is nothing to click, nothing to zoom and no
+   title to reveal, so they take none of the tile interaction. aria-hidden keeps
+   them out of the accessibility tree, where they would otherwise be announced
+   as items in the work list.
+   Shown only once the grid is two-up — at one column there is no row shape to
+   hold open, and blank boxes would just be dead scrolling on a phone.
+   Delete one for each real project added; at six the grid is full and this
+   block and its media query can go with them. */
+.job--empty{
+  display:none;
+  aspect-ratio:4/3;
+  border-radius:var(--r);
+  background:var(--letterbox);
+  border:1px dashed color-mix(in srgb,var(--text) 15%,transparent);
+}
+@media (min-width:640px){ .job--empty{display:block} }
+.job{margin:0}
+.job__link{display:block;text-decoration:none;color:inherit;border-radius:var(--r)}
+.job__link--soon{cursor:default}
+/* a tile with nothing behind it yet reads as inactive: desaturated and faded,
+   the label stays readable on hover */
+.job__link--soon .img > :is(img,video){filter:grayscale(1);opacity:.55}
+.job__link--soon:hover .img > :is(img,video){transform:none}
+
+/* cover, not contain. A zoom on a letterboxed image scales the grey bars along
+   with it and reads as a bug; cover fills the tile so there is only picture to
+   move. The cost is that the three portrait 3:4 sources are now cropped to the
+   middle ~56% of their height instead of floating in a --letterbox frame. */
+.job .img{
+  aspect-ratio:4/3;
+  /* Safari does not clip a transformed child to a border-radius on
+     overflow:hidden alone — the corners square off the moment the zoom starts.
+     The mask forces the rounding onto the compositor, where it holds. */
+  -webkit-mask-image:-webkit-radial-gradient(#fff,#000);
+}
+.job .img > :is(img,video){
+  object-fit:cover;
+  will-change:transform;
+  transform:scale(1);
+  transition:transform 640ms var(--easeSoft);
+}
+
+/* Flat, matching the services shot. A bottom-weighted gradient exists to back
+   text sitting on the lower edge; with the label centred the darkest band lands
+   nowhere near the words and the tile reads as unevenly lit. */
+.job__veil{
+  position:absolute;inset:0;pointer-events:none;
+  background:rgba(0,0,0,.58);
+  opacity:0;
+  transition:opacity 380ms var(--ease);
+}
+/* Centred on both axes. The block itself no longer carries a rise — its lines
+   do that individually now — so this transform is pure centring and stays put. */
+.job__label{
+  position:absolute;pointer-events:none;
+  left:50%;top:50%;
+  /* 34ch, not 26. ch resolves against this element's own font-size — the
+     inherited body size — while the title inside renders at up to 2.125rem, so
+     the cap was roughly a third tighter than it looked and broke "Monster After
+     Dark" onto a second line with one word on it from 1920 up. */
+  width:min(34ch, calc(100% - clamp(2rem,5vw,3.5rem)));
+  text-align:center;
+  opacity:0;transform:translate(-50%,-50%);
+  transition:opacity 260ms var(--ease);
+}
+/* Fixed white, not var(--text) — this sits on a darkened photo in both themes. */
+.job__label h3{margin:0;color:#fff;font-size:clamp(1.375rem,2vw,2.125rem);line-height:1.12}
+.job__label .job__yr{margin:.45rem 0 0;color:rgba(255,255,255,.8);font-size:clamp(1rem,1.15vw,1.1875rem)}
+
+/* Title and year climb line by line, the same move the services panels make.
+   The delay is written per line in JS rather than with nth-child, because the
+   ladder has to run continuously across two elements — a title that wraps to
+   two lines pushes the year one step later. */
+.job__ln{display:block;overflow:hidden;padding-bottom:.14em;margin-bottom:-.14em}
+.job__ln > span{
+  display:inline-block;
+  transform:translateY(115%);
+  transition:transform 620ms var(--ease);
+  transition-delay:var(--d,0ms);
+}
+.job__link:hover .job__ln > span,
+.job__link:focus-visible .job__ln > span{transform:none}
+
+/* :focus-visible carries the same reveal — the title is invisible until then,
+   so keyboard users would otherwise tab onto an unlabelled tile. */
+.job__link:hover .img > :is(img,video),
+.job__link:focus-visible .img > :is(img,video){transform:scale(1.07)}
+.job__link:hover .job__veil,
+.job__link:focus-visible .job__veil{opacity:1}
+.job__link:hover .job__label,
+.job__link:focus-visible .job__label{opacity:1}
+
+/* There is no hover on a phone, so the label would simply never appear. Pinned
+   on instead, which with a flat wash reads as a titled card rather than a stuck
+   hover state. */
+@media (hover:none){
+  .job__veil{opacity:1}
+  .job__label{opacity:1}
+  .job__ln > span{transform:none;transition:none}
+}
+
+/* ==========================================================
+   SERVICES
+   ========================================================== */
+/* padding-top:0 for the same reason #work carries it inline: the section above
+   already contributes a full .sec bottom pad, and letting this one add its own
+   top pad stacked two rhythm units above the heading. The gap above EXPERTISE
+   is now the work section's bottom padding alone — one unit, matching the gap
+   above SELECTED WORK, which is the statement's bottom padding alone. */
+.svc{padding-top:0}
+/* text-align:center used to live here. .caps sets its own text-align:left and
+   the heading overrode it, so the only thing it still reached was the new tag,
+   which it centred while the heading under it sat on the gutter. Dropped rather
+   than overridden a third time. */
+
+
+/* ==========================================================
+   ACCOMPLISHMENTS — awards table
+   A grid, not a <table>: the cells carry their own labels so the whole thing
+   can restack into a card per row on a phone, which a table layout will not do.
+   ========================================================== */
+/* Not padding-top:0 like #work and .svc. Those sit directly under a full-bleed
+   band and a grid; this one follows the capability lists, and at a single
+   rhythm unit the awards read as a continuation of them rather than a section
+   of their own. Half a unit on top of the one above it separates them. */
+.acc{padding-top:clamp(2rem,5vw,4.5rem)}
+.acc__list{list-style:none;margin:0;padding:0}
+.acc__row{
+  display:grid;
+  /* index / name / project / category / year. The name track is the widest
+     because it holds the longest strings; year is sized to its content. */
+  grid-template-columns:3.5rem minmax(0,1.2fr) minmax(0,1fr) minmax(0,1fr) auto;
+  gap:0 clamp(1rem,2vw,2.5rem);
+  align-items:start;
+  /* Asymmetric, as the reference is: from the rule above to the top of the name
+     ink is 1.971vw there, and from the last ink to the rule below is 2.667vw.
+     Those are ink-to-rule distances, not padding, so these values were tuned
+     against the rendered ink until they landed: measured back at 1.97vw and
+     2.68vw. The floors keep the rows from collapsing on a phone. */
+  padding-top:max(1.9vw,1.25rem);padding-bottom:max(2.3vw,1.5rem);
+  /* Hairline on top of every row, so the first row is capped and the last edge
+     belongs to the section below rather than to the list. */
+  border-top:1px solid color-mix(in srgb,var(--text) 12%,transparent);
+}
+.acc__no{
+  margin:0;font-size:max(1vw,.8125rem);line-height:1.3;
+  color:var(--muted);font-variant-numeric:tabular-nums;
+}
+/* Sizes below are measured off the reference capture. That image is 3450px
+   wide and spans the site's full viewport, so 100vw = 3450px in it and any
+   vw-based size lands on a fixed pixel count there whatever the device ratio
+   was — 1vw = 34.5px. Ink heights were then divided by the glyph's share of the
+   em (.73 ascender, .715 cap, .95 ascender-to-descender) to recover the size.
+   Two independent strings agreed on each value to within 3%. */
+.acc__name{
+  margin:0;font-family:var(--display);font-weight:400;
+  /* 1.469vw from "Awwwards", 1.434vw from "Webby Awards" */
+  font-size:max(1.45vw,1.0625rem);
+  letter-spacing:-.025em;line-height:1.15;
+}
+.acc__cell{display:block}
+.acc__label{
+  /* .892vw from "Year", .873vw from "Project" */
+  margin:0 0 .35em;font-size:max(.88vw,.75rem);line-height:1.3;
+  color:var(--muted);
+}
+.acc__val{
+  /* .973vw from "2025", .874vw from "Form&Fun Portfolio" — the spread here is
+     the widest of the three, so this sits between them. */
+  margin:0;font-size:max(.93vw,.8125rem);
+  /* Stacked category lines run on a 1.110vw pitch there, which against this
+     size is 1.19. */
+  line-height:1.19;color:var(--text);
+}
+/* A cell can hold several values — one award name covering more than one
+   category, in the reference's "1x <category>" form. They stack under the one
+   label rather than repeating it, and the row grows to fit the tallest cell. */
+.acc__val + .acc__val{margin-top:0}
+.acc__cell--year{text-align:right}
+.acc__cell--year .acc__val{font-variant-numeric:tabular-nums}
+/* Below the three-across breakpoint the row becomes a stacked card: the number
+   and name hold the top line, the three labelled cells sit under them in a row
+   that wraps. The labels are why this reads at all once the columns are gone. */
+@media (max-width:779.98px){
+  .acc__row{
+    grid-template-columns:3rem 1fr;
+    gap:.75rem clamp(1rem,2vw,2.5rem);
+  }
+  .acc__cell{grid-column:2}
+  .acc__cell--year{text-align:left}
+}
+
+/* ==========================================================
+   SERVICES — three capability columns
+   A static three-up: a square plate, the discipline, then what falls under it
+   in two columns. No accordion. The old one hid each card's list until you
+   hovered, which meant the section could not be read at a glance and gave a
+   touch device nothing — every panel opened at once in the stack anyway, so the
+   mechanism only ever worked on one input. Here the lists are simply present,
+   and hover is reduced to what it should be: an indication of which column you
+   are pointing at, not the thing that reveals the content.
+   ========================================================== */
+.caps{
+  display:grid;
+  /* An explicit three, not auto-fit. auto-fit sizes tracks to the available
+     width and then drops the empty ones — with three cards in a container wide
+     enough for four it laid out four tracks and left the row a quarter short,
+     so the columns stopped reading as thirds. */
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:1vw;
+  text-align:left;
+  /* The .secHead above carries the gap now, same as the work section, so the
+     grid adds nothing of its own. */
+  margin-top:0;
+}
+.caps__item{
+  --pad:clamp(.75rem,1.4vw,1.25rem);
+  /* Flush at rest, like the reference: the plate fills its grid cell edge to
+     edge and the only space between columns is the grid gap. */
+  padding:0;
+  border-radius:calc(var(--r) + var(--pad));
+  background:transparent;
+  transition:padding 380ms var(--ease), background 380ms var(--ease);
+}
+/* Hover inflates the padding rather than transforming the plate. That is the
+   reference behaviour and it genuinely relayouts the column: the plate loses
+   2*--pad of width, and being square loses the same in height, so the title and
+   list ride up while the text indents by --pad. Net item height is unchanged —
+   the 2*--pad the box gains in padding is exactly what the plate gives back —
+   so the grid row does not resize and the neighbouring columns stay put. */
+.caps__item:hover,
+.caps__item:focus-within{padding:var(--pad);background:var(--capsPanel)}
+.caps__shot{
+  display:block;margin:0;
+  aspect-ratio:1;
+  border-radius:var(--r);
+  overflow:hidden;background:var(--letterbox);
+  /* No transform of its own. The inset now comes from the parent's padding, so
+     the plate is genuinely smaller rather than a scaled paint of its full size,
+     which is what lets the text below move with it. */
+}
+/* Empty placeholder plates. The ratio label makes it obvious what shape the
+   real asset needs and that nothing here is final. Same treatment as the
+   placeholders on the case study pages. */
+.caps__shot{display:grid;place-items:center}
+.caps__shot img{width:100%;height:100%;object-fit:cover;display:block}
+/* ---- Web panel: a low-fi wireframe page scrolling on a loop ----
+   Drawn in CSS so it is an original: grey blocks on a white page, one navy
+   accent. Everything is sized in container units of the page, so it scales
+   with the plate. The page is laid out twice and both copies translate by
+   one page height, so the loop has no seam. */
+.caps__shot--wire{position:relative;display:block}
+.caps__shot--wire::after{content:none}
+.wf{position:absolute;left:12%;right:12%;top:10%;bottom:-2%;overflow:hidden;border-radius:10px 10px 0 0;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.06),0 18px 40px rgba(0,0,0,.10);container-type:inline-size;--ink:#E3E3E6;--pale:#EEEEF1;--band:#F2F2F4;--navy:#172033}
+html[data-theme="dark"] .wf{background:#1b1c1f;box-shadow:0 0 0 1px rgba(255,255,255,.06),0 18px 40px rgba(0,0,0,.4);--ink:#2e3034;--pale:#26282c;--band:#222428;--navy:#e7e9ee}
+.wf__track{animation:wfScroll 16s linear infinite;will-change:transform}
+.wf__page{padding:0 0 6cqw}
+@keyframes wfScroll{from{transform:translateY(0)}to{transform:translateY(-50%)}}
+.wf i{display:block;background:var(--ink);border-radius:.6cqw}
+.wf__nav,.wf__foot{display:flex;align-items:center;gap:3cqw;padding:4cqw 6cqw}
+.wf .wf__logo{width:7cqw;height:7cqw;border-radius:50%}
+.wf__links{display:flex;gap:3cqw;flex:1;justify-content:center}
+.wf__links i{width:9cqw;height:2cqw}
+.wf .wf__cta{width:14cqw;height:5cqw;border-radius:99px;background:var(--navy)}
+.wf__hero{padding:7cqw 6cqw 6cqw;display:flex;flex-direction:column;align-items:center;gap:2.6cqw}
+.wf__h1{width:72cqw;height:6cqw}.wf__h1--short{width:48cqw}
+.wf__p{width:62cqw;height:2.4cqw}.wf__p--short{width:40cqw}
+.wf .wf__btn{width:26cqw;height:6.5cqw;border-radius:99px;background:var(--navy);margin-top:2cqw}
+.wf .wf__btn--ghost{background:none;box-shadow:inset 0 0 0 .5cqw var(--ink)}
+.wf__media{margin:0 6cqw;height:36cqw;background:var(--pale);border-radius:2cqw}
+.wf__grid{display:grid;grid-template-columns:repeat(3,1fr);gap:3cqw;padding:7cqw 6cqw 0}
+.wf__card{display:flex;flex-direction:column;gap:2cqw}
+.wf__thumb{height:19cqw;background:var(--pale);border-radius:2cqw}
+.wf__t{width:90%;height:2cqw}.wf__t--short{width:55%}
+.wf__split{display:grid;grid-template-columns:1fr 1fr;gap:5cqw;align-items:center;padding:9cqw 6cqw 0}
+.wf__media--sq{margin:0;height:38cqw}
+.wf__copy{display:flex;flex-direction:column;gap:2.4cqw;align-items:flex-start}
+.wf__h2{width:34cqw;height:4cqw}
+.wf__copy .wf__p{width:40cqw}.wf__copy .wf__p--short{width:28cqw}
+.wf__copy .wf__btn{width:20cqw;height:5.6cqw;margin-top:1cqw}
+.wf__band{margin:9cqw 6cqw 0;padding:8cqw 6cqw;background:var(--band);border-radius:2cqw;display:flex;flex-direction:column;align-items:center;gap:2.6cqw}
+.wf__band .wf__h2{width:44cqw}.wf__band .wf__p{width:56cqw}
+.wf__foot{margin-top:8cqw;border-top:.4cqw solid var(--pale)}
+.wf__foot .wf__links{justify-content:flex-end}
+@media (prefers-reduced-motion:reduce){ .wf__track{animation:none} }
+/* ---- Product panel: a user flow on a dotted canvas ----
+   Three small screens, a path between them and a dot that travels it. No
+   sheet: the canvas is the plate itself, dotted like a whiteboard. */
+.caps__shot--flow{display:block}
+.fl{position:absolute;inset:0;container-type:inline-size;--ink:#DADBDF;--pale:#ECECEF;--navy:#172033;--sheet:#fff;
+  background-image:radial-gradient(circle,rgba(0,0,0,.10) 1px,transparent 1.4px);background-size:7% 7%;background-position:3.5% 3.5%}
+html[data-theme="dark"] .fl{--ink:#2e3034;--pale:#26282c;--navy:#e7e9ee;--sheet:#1b1c1f;background-image:radial-gradient(circle,rgba(255,255,255,.10) 1px,transparent 1.4px)}
+.fl__path{position:absolute;inset:0;width:100%;height:100%}
+.fl__path path{stroke:var(--navy);stroke-width:.7;stroke-dasharray:2 2;opacity:.5;vector-effect:non-scaling-stroke}
+.fl__dot{fill:var(--navy)}
+.fl__screen{position:absolute;width:26cqw;background:var(--sheet);border-radius:3cqw;padding:2.4cqw;display:flex;flex-direction:column;gap:2cqw;box-shadow:0 0 0 1px rgba(0,0,0,.06),0 10cqw 14cqw -8cqw rgba(0,0,0,.18)}
+html[data-theme="dark"] .fl__screen{box-shadow:0 0 0 1px rgba(255,255,255,.07),0 10cqw 14cqw -8cqw rgba(0,0,0,.5)}
+.fl__screen--a{left:6cqw;top:14cqw}
+.fl__screen--b{left:37cqw;top:36cqw}
+.fl__screen--c{left:66cqw;top:58cqw}
+.fl i{display:block;background:var(--ink);border-radius:.8cqw}
+.fl .fl__bar{height:2cqw;width:60%;background:var(--pale);margin-bottom:.6cqw}
+.fl .fl__row{height:4.4cqw;background:var(--pale);border-radius:1.2cqw}
+.fl .fl__row--on{background:var(--navy);opacity:.9}
+.fl .fl__img{height:12cqw;background:var(--pale);border-radius:1.6cqw}
+.fl .fl__l{height:1.8cqw;width:85%}.fl .fl__l--short{width:55%}
+.fl .fl__field{height:4.2cqw;background:none;box-shadow:inset 0 0 0 .4cqw var(--ink);border-radius:1.2cqw}
+.fl .fl__btn{height:4.6cqw;border-radius:99px;background:var(--navy);margin-top:.6cqw}
+@media (prefers-reduced-motion:reduce){ .fl__dot{display:none} }
+/* ---- Branding panel: a stationery set ----
+   The identity applied: a letterhead, a business card across its corner and
+   a round sticker. Same blocks, but three objects at three sizes instead of
+   one page, so it reads as print rather than a screen. */
+.caps__shot--set{display:block}
+.st{position:absolute;inset:0;container-type:inline-size;--ink:#E3E3E6;--pale:#EEEEF1;--navy:#172033;--sheet:#fff;--shadow:0 0 0 1px rgba(0,0,0,.06),0 14px 34px rgba(0,0,0,.10)}
+html[data-theme="dark"] .st{--ink:#2e3034;--pale:#26282c;--navy:#e7e9ee;--sheet:#1b1c1f;--shadow:0 0 0 1px rgba(255,255,255,.06),0 14px 34px rgba(0,0,0,.45)}
+.st i{display:block;background:var(--ink);border-radius:.6cqw}
+.st__mark{position:relative;display:block;flex:none}
+.st .st__ma{position:absolute;left:0;top:0;width:66%;height:66%;border-radius:50%;background:var(--navy)}
+.st .st__mb{position:absolute;right:0;bottom:0;width:50%;height:50%;border-radius:18%;background:var(--ink)}
+.st__letter{position:absolute;left:12%;top:9%;width:46cqw;height:62cqw;background:var(--sheet);border-radius:2cqw;box-shadow:var(--shadow);padding:5cqw;display:flex;flex-direction:column;gap:2.2cqw;transform:rotate(-3deg);transform-origin:50% 50%}
+.st__mark--sm{width:7cqw;height:7cqw;margin-bottom:2cqw}
+.st .st__l{height:1.6cqw;width:100%}.st .st__l--w{width:60%;height:2.4cqw;background:var(--navy);opacity:.85}.st .st__l--short{width:62%}.st .st__l--sig{width:34%;height:1.2cqw;background:var(--navy);opacity:.6}
+.st .st__gap{height:1.4cqw;background:none}
+.st__card{position:absolute;left:38%;top:58%;width:48cqw;height:28cqw;background:var(--sheet);border-radius:2cqw;box-shadow:var(--shadow);padding:4cqw;display:flex;align-items:center;gap:4cqw;transform:rotate(4deg)}
+.st__mark--md{width:11cqw;height:11cqw}
+.st__cardlines{flex:1;display:flex;flex-direction:column;gap:2cqw}
+.st .st__l--name{width:80%;height:2.6cqw}
+.st__badge{position:absolute;right:11%;top:12%;width:26cqw;height:26cqw;border-radius:50%;background:var(--sheet);box-shadow:var(--shadow);display:grid;place-items:center}
+.st__mark--lg{width:12cqw;height:12cqw}
+
+
+.caps__shot:has(img)::after{content:none}
+.caps__shot::after{
+  content:attr(data-ph);
+  font-size:clamp(.6875rem,.8vw,.8125rem);
+  letter-spacing:.06em;text-transform:uppercase;
+  color:var(--muted);opacity:.6;
+  padding:0 1rem;text-align:center;
+}
+.caps__title{
+  font-family:var(--display);font-weight:400;
+  font-size:clamp(1.75rem,3.4vw,3rem);
+  letter-spacing:-.035em;line-height:1.02;
+  margin:clamp(1.25rem,2.2vw,1.75rem) 0 0;
+}
+/* One column while the cards sit three across. The references run this list in
+   two, but their cards are about 830px wide and these are 320-407 — measured,
+   the longest phrase here needs 161px and a two-column track is 152px at 1300
+   and 174px at 1440, so two columns wrapped almost every line. Two columns
+   return below, where a stacked card is 450-660 wide and they genuinely fit. */
+.caps__list{
+  list-style:none;margin:clamp(1rem,1.8vw,1.5rem) 0 0;padding:0;
+  display:grid;grid-template-columns:1fr;
+  /* Measured off the reference screenshot against this build at matching glyph
+     height (32px cap-to-descender in both): the reference sets its rows on a
+     55.3px pitch, this build was on 59.5px. At 1em ~= 34px there, 55.3px is
+     1.63em, so 1.35 leading leaves .28em of gap rather than .4em. */
+  column-gap:clamp(1rem,1.6vw,1.75rem);row-gap:.28em;
+  font-size:clamp(.9375rem,1.05vw,1.0625rem);
+  line-height:1.35;color:var(--text);
+}
+/* Two columns are back above 1290 — measured: at 1250 the card is 400 and two
+   lines still wrapped, at 1290 it clears. They were dropped when the container was
+   capped at 1500 with 64px gutters, which left a card 320-407 wide against a
+   longest phrase of 161px. On the reference's geometry the same card is 461 at
+   1440 and 819 at 2560, so the two-column track is 199px and up — the layout
+   the references use only works once the padding underneath it does. */
+@media (min-width:1290px){
+  .caps__list{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+/* Stacks at 780, not lower: at 700 the three-across card is down to 194px and
+   the longest phrase had started wrapping onto its own line. */
+@media (max-width:779.98px){
+  .caps{grid-template-columns:1fr;gap:clamp(2rem,6vw,3rem)}
+  /* Full width card here, so the two columns the references use genuinely fit. */
+  .caps__list{grid-template-columns:repeat(2,minmax(0,1fr))}
+  /* A square plate at full width would fill most of a phone screen before the
+     first word of the column it belongs to. */
+  .caps__shot{aspect-ratio:16/10}
+  /* The net-zero height above depends on the plate being square: it gives back
+     in height exactly what the padding takes in width. At 16/10 it only gives
+     back 10/16 of it, so the card grew by .75 * --pad on hover and shoved the
+     stacked columns below it down. Pulling that much back off the plate keeps
+     the height constant here too. */
+  .caps__item:hover .caps__shot,
+  .caps__item:focus-within .caps__shot{margin-bottom:calc(var(--pad) * -.75)}
+}
+@media (max-width:430px){
+  .caps__list{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){
+  /* The padding still applies on hover, it just arrives instantly rather than
+     animating — an animated relayout is exactly what this query is for. */
+  .caps__item,.caps__shot{transition:none}
+}
+
+/* ---- theme wipe ----
+   The default cross-fade is dropped so the only thing animating is the clip
+   path set in JS. The new snapshot sits above the old one and is cut out as a
+   circle growing from the button; the old page simply waits underneath.
+   mix-blend-mode has to be normal — the default plus-lighter blows out the
+   overlap while both layers are on screen. */
+::view-transition-old(root),
+::view-transition-new(root){animation:none;mix-blend-mode:normal}
+::view-transition-old(root){z-index:0}
+::view-transition-new(root){z-index:1}
+/* Colour transitions are suppressed for the duration, otherwise the page fades
+   its own background at the same time the circle is revealing it. */
+html.theming body,
+html.theming .svc,
+html.theming .contact,
+html.theming .theme{transition:none !important}
+
+/* ==========================================================
+   CONTACT
+   ========================================================== */
+.contact{background:var(--invert-bg);color:var(--invert-fg);transition:background 320ms linear,color 320ms linear}
+.contact .lede{color:var(--invert-dim)}
+.contact h2{max-width:18ch}
+.mail{
+  display:inline-block;margin-top:2.25rem;
+  font-size:clamp(1.125rem,2.4vw,1.75rem);font-weight:400;
+  letter-spacing:-.02em;text-decoration:none;color:var(--invert-fg);
+  border-bottom:2px solid color-mix(in srgb,var(--invert-fg) 28%,transparent);
+  padding-bottom:.35rem;transition:border-color var(--fast) var(--ease);
+}
+.mail:hover{border-bottom-color:var(--invert-fg)}
+.foot{
+  display:flex;flex-wrap:wrap;gap:1rem 2.5rem;justify-content:space-between;align-items:center;
+  padding-block:clamp(2rem,4vw,3rem);
+  /* The back-to-top button is position:fixed in this same corner, so at the end
+     of the page it lands on top of the last footer link — measured, it covered
+     all but the last two letters of Resume at every width from 1440 to 2560.
+     Reserve its footprint: 46px of button, its own right offset, and a gap,
+     less the gutter this row already sits inside. max() so nothing is reserved
+     on layouts where the gutter alone already clears it. */
+  padding-right:max(0px, calc(46px + clamp(1rem,3vw,2rem) + 1rem - var(--gut)));
+  color:color-mix(in srgb,var(--invert-fg) 52%,transparent);font-size:.875rem;
+}
+.foot ul{display:flex;flex-wrap:wrap;gap:1.75rem;list-style:none;margin:0;padding:0}
+.foot a{text-decoration:none;transition:color var(--fast) var(--ease)}
+.foot a:hover{color:var(--invert-fg)}
+.foot p{margin:0}
+
+/* ==========================================================
+   SMOOTH SCROLL SHELL
+   ========================================================== */
+html.smooth #view{position:fixed;top:0;left:0;width:100%;will-change:transform}
+
+/* ==========================================================
+   REVEALS
+   ========================================================== */
+/* ==========================================================
+   REVEALS — every [data-el] is scrubbed from its own position.
+   There is no central conductor: an element's progress is its own distance
+   through the reveal window, which is what lets the whole thing run in either
+   direction. The one exception is grid items, which are given a lag by column
+   so a row of them arrives left to right rather than all at once — see REV_LAG.
+   Slide and fade only — no blur, no scale.
+   ========================================================== */
+/* No transitions here on purpose. Every one of these is driven per-frame from
+   scroll position, so the reveal can be scrubbed in either direction and never
+   finishes on its own. Only applied when JS is running — otherwise the content
+   would be permanently hidden. */
+html.js [data-el]{opacity:0;transform:translateY(64px);will-change:transform,opacity}
+
+/* Headings reveal letter by letter from behind a per-line mask. The
+   padding/negative-margin pair stops overflow:hidden clipping descenders;
+   nowrap is safe because the lines were measured from real layout. */
+html.js [data-el].split,
+html.js .flankEl.split{opacity:1;transform:none}
+.ln{
+  display:block;white-space:nowrap;
+  padding-bottom:.14em;margin-bottom:-.14em;
+  /* clip-path, not overflow:hidden. overflow clips on both axes, and the
+     contact heading only cleared its own mask by 8px in Chromium — any browser
+     that sets the face a hair wider (or falls back before the webfont lands)
+     pushed the last letters past the edge and they were cut off mid-glyph.
+     This masks top and bottom, which is all the reveal needs, and lets the line
+     run past its right edge rather than losing letters. */
+  clip-path:inset(0 -100vw);
+}
+.ch{display:inline-block}
+html.js .ch{transform:translateY(115%);will-change:transform}
+.ch.sp{width:.28em}
+
+
+
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{
+    animation-duration:.001ms !important;animation-delay:0ms !important;
+    transition-duration:.001ms !important;transition-delay:0ms !important;
+  }
+  html.js [data-el]{opacity:1;transform:none}
+  .flankEl{opacity:1 !important;transform:none !important}
+  .ch{transform:none !important}
+  .hero__type .mask > span,.hero__type .ch,.hero__card,.hero__corners > *{transform:none;opacity:1}
+  .lit c{color:var(--text)}
+  .job .img > :is(img,video){transform:none !important}
+  .job__ln > span{transform:none !important;transition:none !important}
+  html.smooth #view{position:static;transform:none !important}
+  .hero{transform:none !important}
+  .lit{height:auto;padding-block:clamp(4rem,10vw,8rem)}
+  .lit__pin{height:auto;transform:none !important}
+  .hero__type .l1,.hero__type .l2,.hero__corners{transform:none !important;opacity:1 !important}
+  .heroTrack{height:auto}
+}
+
+/* ==========================================================
+   TOUCH TARGETS — 44px minimum
+   ========================================================== */
+@media (pointer:coarse){
+  .tlink{min-height:46px;align-items:center}
+  .mail{min-height:46px;display:inline-flex;align-items:center;padding-bottom:.6rem}
+  .foot ul{gap:.25rem 1.25rem}
+  .foot ul a{min-height:44px;display:inline-flex;align-items:center;padding-inline:.15rem}
+  .btn{min-height:48px}
+  .tab{min-height:44px}
+}
+
+/* ==========================================================
+   PAGE TRANSITION — following a project link
+   A cross-document view transition, and only on a project link: a work tile on
+   the index, or "Next project" at the foot of a case study. @view-transition has
+   no per-link switch — it opts the document into every same-origin navigation
+   there is — so the narrowing is done in the script, which cancels the
+   transition for anything else. Home, the back button and in-page anchors
+   navigate exactly as they did before any of this existed.
+
+   Where it does run: the browser holds the outgoing page on screen, paints the
+   incoming one, and animates between the two. A browser without the feature
+   ignores @view-transition and every navigation is a plain load, which is the
+   same thing the site did before.
+
+   The move itself is a shared element. The work tile's image frame on the index
+   and the case study's hero media are tagged with the same
+   view-transition-name in JS, so the browser treats them as one element in two
+   places and animates the box from one to the other. The title comes with it.
+   See the script in the head for which elements get tagged and when.
+   ========================================================== */
+@view-transition{ navigation:auto }
+
+/* Everything that is not the shared element cross-fades. It used to be kept
+   deliberately short — 340ms against the frame's 640 — on the theory that the
+   context should get out of the way and let the shared element finish alone.
+   Watching it back, that is exactly what goes wrong: the index is gone within
+   half the move, so the picture and the title spend the rest of it growing out
+   of the top-left corner of a blank white page with nothing around them to
+   travel between. Matched to the frame instead, the grid is still there while
+   the tile leaves it, which is the whole illusion. */
+::view-transition-old(root),
+::view-transition-new(root){
+  animation-duration:600ms;
+  animation-timing-function:var(--ease);
+}
+
+/* The frame's travel. Longer than the cross-fade so the box is still settling
+   after the page underneath has finished swapping. */
+::view-transition-group(projectMedia),
+::view-transition-group(projectTitle){
+  animation-duration:640ms;
+  animation-timing-function:var(--easeSoft, var(--ease));
+}
+
+/* The two snapshots are different crops of different images: 4:3 on the tile,
+   near-square-to-tall on the hero. Left alone the browser keeps each snapshot's
+   own aspect ratio, anchors it to the top of the animating box and lets it
+   overflow — the image visibly stretches and spills mid-move. Forcing both to
+   fill the box with object-fit:cover makes them behave exactly like the real
+   <img>s do, so the move reads as the crop changing rather than the picture
+   deforming. */
+::view-transition-old(projectMedia),
+::view-transition-new(projectMedia){
+  width:100%;height:100%;object-fit:cover;
+  animation-duration:640ms;
+  animation-timing-function:var(--easeSoft, var(--ease));
+}
+/* Both snapshots have the tile's corner radius baked into them, and cover
+   scales that baked corner along with the picture. Re-clipping at the group
+   gives one constant radius for the whole move instead. */
+::view-transition-group(projectMedia){
+  border-radius:var(--r);
+  overflow:clip;
+}
+
+/* The title crosses from small white type centred on a darkened tile to the
+   page's display heading, so this is a cross-fade of two very different frames
+   travelling together. Slightly slower than the frame keeps them from
+   separating. */
+::view-transition-old(projectTitle),
+::view-transition-new(projectTitle){
+  animation-duration:520ms;
+  animation-timing-function:var(--ease);
+}
+
+/* ---- fallback for browsers without cross-document transitions ----
+   Firefox has none at all, and Safari only from 18.2, so for a real share of
+   visitors the navigation above never runs and a project link swaps pages
+   instantly. No amount of CSS gets the morph back — there is nothing to morph
+   two documents with — so this does the one thing that is still available:
+   covers the outgoing page, navigates behind the cover, and uncovers the new
+   one. A dip to the page colour rather than a fade to nothing, so it reads as
+   one surface being replaced instead of the screen blinking.
+
+   A pseudo-element on <html> rather than a real div, because the incoming page
+   has to be covered before its first paint — at that point the script running
+   in the head has no body to append anything to, but it can already put a class
+   on the root. */
+html.fbv::before{
+  content:"";
+  position:fixed;inset:0;
+  /* Above the fixed scroll wrapper, the theme toggle and the back-to-top
+     button, all of which sit under 100. */
+  z-index:9999;
+  background:var(--bg);
+  pointer-events:none;
+  opacity:0;
+  transition:opacity 220ms var(--ease);
+}
+html.fbv-on::before{opacity:1}
+/* Both classes are set before the first style resolution on the way in, so the
+   cover starts opaque rather than transitioning up from nothing. */
+
+@media (prefers-reduced-motion:reduce){
+  html.fbv::before{display:none}
+}
+</style>
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}</style>
+<style>
+/* artifact copy: overlay hero extended down to tablet widths (768px+).
+   Between 768 and 1149px the side columns are narrow, so the flank panel
+   takes a smaller measure and type scale than the desktop values. */
+@media (min-width:768px) and (max-width:1149.98px) and (prefers-reduced-motion:no-preference){
+  /* the flank grid is edge to edge; the gutter keeps the copy off the viewport edge
+     where the side columns get narrow */
+  .heroFlank{--flankW:18rem;column-gap:clamp(1rem,2.5vw,2rem);padding-inline:clamp(1.5rem,4vw,3rem);box-sizing:border-box}
+  .flankCopy h2{font-size:clamp(1.6rem,3.2vw,2.4rem)}
+  .flankCopy p{font-size:.92rem;line-height:1.45}
+  .flankCopy h2 + p{margin-top:1rem}
+  .flankCopy .btn{white-space:nowrap}
+}
+/* tablet portrait: the middle column is sized off hero height, which in a tall
+   viewport leaves the side columns too thin for the copy. Cap it off width. */
+@media (min-width:768px) and (max-width:1149.98px) and (orientation:portrait) and (prefers-reduced-motion:no-preference){
+  .heroFlank{grid-template-columns:minmax(0,1fr) min(var(--cardW,42svh),36vw) minmax(0,1fr);--flankW:17rem}
+  .flankCopy .btn{padding-inline:1.1rem;font-size:.9rem}
+}
+</style>
+<style>
+/* artifact copy: the statement pins. The section is a track one viewport taller
+   than the pin plus the travel the lighting takes; the pin is held in place by
+   the paint loop (a translate, like the hero — sticky can't be used under the
+   smooth-scroll transform) and the letters light against progress through the
+   track rather than against the block's position on screen. */
+@media (prefers-reduced-motion:no-preference){
+  .lit{height:calc(100svh + var(--litTravel,110vh));padding-block:0}
+  .lit__pin{height:100svh;display:flex;align-items:center;will-change:transform}
+}
+</style>
+</head>
+<body>
+
+<button class="theme" id="themeBtn" type="button" aria-pressed="false" aria-label="Switch to dark mode" title="Switch theme">
+  <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>
+  </svg>
+  <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="4.2"/>
+    <path d="M12 1.8v2.4M12 19.8v2.4M4.2 4.2l1.7 1.7M18.1 18.1l1.7 1.7M1.8 12h2.4M19.8 12h2.4M4.2 19.8l1.7-1.7M18.1 5.9l1.7-1.7"/>
+  </svg>
+</button>
+
+<button class="totop" id="toTop" type="button" aria-label="Back to top" title="Back to top">
+  <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor"
+       stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M10 16V5M5 10l5-5 5 5"/>
+  </svg>
+</button>
+
+<div id="view">
+<main id="top">
+
+  <!-- ===== HERO — type, then the portrait and its two panels ===== -->
+  <section class="heroTrack" id="heroTrack">
+    <div class="hero shell" id="hero">
+
+      <h1 class="hero__type">
+        <span class="l1"><span class="mask"><span>Graphic</span></span></span>
+        <span class="l2"><span class="mask"><span>Designer</span></span></span>
+      </h1>
+
+      <div class="hero__cardWrap">
+        <div class="hero__card">
+          <img src="assets/kevin-tran-portrait.jpg" alt="Kevin Tran" width="5000" height="2021" fetchpriority="high">
+        </div>
+      </div>
+
+      <div class="hero__corners">
+        <p class="hero__mark">©2026</p>
+        <p class="meta">/ Designing since 2019</p>
+      </div>
+    </div>
+
+    <!-- Copy lives inside the hero track, not in a section of its own: on
+         desktop the whole block is overlaid to the left of the grown portrait,
+         which keeps the headline, the supporting line and the CTAs as one
+         read rather than splitting them across the composition. -->
+    <div class="aboutAnchor" id="about" aria-hidden="true"></div>
+    <div class="heroFlank" id="heroFlank">
+
+      <div class="flankCopy">
+        <h2 class="flankEl" data-split>Hey, I'm Kevin.</h2>
+        <p class="flankEl" data-split-lines>I lead design and web at Spigen — the storefront, the email program, whatever we're building next. I came from the design side and taught myself the build side because I'd rather make the thing than describe it.</p>
+        <div class="btns flankEl">
+          <a class="btn btn--fill" href="#contact">Work with me<span class="btn__arrow" aria-hidden="true"><svg width="17" height="10" viewBox="0 0 17 10" fill="none"><path d="M0 5h15M12 1l3.5 4-3.5 4" stroke="currentColor" stroke-width="1.6"/></svg></span></a>
+          <a class="btn btn--ghost" href="#work">See the work<span class="btn__arrow" aria-hidden="true"><svg width="17" height="10" viewBox="0 0 17 10" fill="none"><path d="M0 5h15M12 1l3.5 4-3.5 4" stroke="currentColor" stroke-width="1.6"/></svg></span></a>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+
+  <!-- ===== STATEMENT — pinned, letters light against scroll progress ===== -->
+  <section class="lit" id="litTrack">
+    <div class="lit__pin">
+      <div class="shell">
+        <p class="lit__eyebrow">On design</p>
+        <p data-lit-text>
+          Every brief is a person, a problem and a product that's meant to solve it.
+          Understand all three and the design draws itself.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== WORK ===== -->
+  <section class="sec shell" id="work" style="padding-top:0" data-seq>
+    <!-- Back in the reveal system. The band it used to sit flush against is
+         gone, so there is nothing underneath for the 64px rise to collide with,
+         and data-split gives it the same per-letter cascade the other section
+         heads use. The tag is a sibling rather than a child: the splitter
+         rewrites the h2's innerHTML, so anything inside it would be erased. -->
+    <div class="secHead secHead--row">
+      <h2 data-el data-split>Selected work</h2>
+      <p class="secHead__tag" data-el>2022&ndash;2026</p>
+    </div>
+
+    <div class="jobs">
+      <article class="job" data-el>
+        <a class="job__link" href="project.html?p=monster-after-dark">
+          <div class="img">
+            <img src="assets/monster-after-dark-tile.jpg" alt="Monster After Dark" width="2160" height="720" loading="lazy" decoding="async">
+            <div class="job__veil" aria-hidden="true"></div>
+            <div class="job__label">
+              <h3>Monster After Dark</h3>
+              <p class="job__yr">2026</p>
+            </div>
+          </div>
+        </a>
+      </article>
+
+      <article class="job" data-el>
+        <a class="job__link" href="project.html?p=rengar">
+          <div class="img">
+            <!-- Pre-cropped to 4:3 rather than left to object-fit. The source is
+                 a 5:3 splash and a centred cover crop cuts the head to the edge
+                 of the frame; what ships here is offset right so the face lands
+                 near the middle of the tile and stays there through the 1.07
+                 hover zoom. The clip carries the same crop, taken off the same
+                 source at 982x736 from x=258, so the poster and the first frame
+                 land on the same pixels and there is no jump when it starts.
+                 No autoplay attribute: the script below starts it, which means
+                 reduced-motion and no-JS both settle on the poster — the exact
+                 still that shipped here before. -->
+            <video class="job__clip" poster="assets/rengar-tile.webp" width="1400" height="1050"
+                   muted loop playsinline preload="none"
+                   aria-label="Rengar The Pridestalker">
+              <source src="assets/rengar-tile.webm" type="video/webm">
+              <source src="assets/rengar-tile.mp4" type="video/mp4">
+            </video>
+            <div class="job__veil" aria-hidden="true"></div>
+            <div class="job__label">
+              <h3>Rengar The Pridestalker</h3>
+              <p class="job__yr">2026</p>
+            </div>
+          </div>
+        </a>
+      </article>
+
+      <article class="job" data-el>
+        <a class="job__link" href="project.html?p=spigen-duo">
+          <div class="img">
+            <img src="assets/spigen-duo-tile.jpg" alt="Two hands holding the iPhone Duo half open in a clear Spigen case, camera side and inner display both showing." width="1600" height="1200" loading="lazy" decoding="async">
+            <div class="job__veil" aria-hidden="true"></div>
+            <div class="job__label">
+              <h3>Spigen Duo Landing Page</h3>
+              <p class="job__yr">2026</p>
+            </div>
+          </div>
+        </a>
+      </article>
+
+      <article class="job" data-el>
+        <div class="job__link job__link--soon" aria-label="Gift Guide — under construction">
+          <div class="img">
+            <img src="assets/gift-guide-tile.jpg" alt="Gift Guide" width="1000" height="1331" loading="lazy" decoding="async">
+            <div class="job__veil" aria-hidden="true"></div>
+            <div class="job__label">
+              <h3>Under Construction</h3>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <!-- Placeholders — replace each with a real project tile. -->
+    </div>
+  </section>
+
+  <!-- ===== SERVICES ===== -->
+  <section class="sec svc" id="services" data-seq>
+    <div class="shell">
+      <div class="secHead secHead--stack">
+        <p class="secHead__tag" data-el>Skills &amp; Expertise</p>
+        <h2 data-el data-split>What I can help with</h2>
+      </div>
+
+      <!-- Three columns. The plate in each is cloned at runtime from the work
+           grid rather than embedded again — same base64 assets, and a second
+           copy would add well over a megabyte. The column-to-project mapping
+           lives in the script. -->
+      <div class="caps">
+      <article class="caps__item" data-el>
+        <figure class="caps__shot caps__shot--wire" aria-label="A low-fidelity wireframe of a landing page scrolling on a loop: navigation, hero, media block, card grid, split section, band and footer."><div class="wf" aria-hidden="true"><div class="wf__track"><div class="wf__page">
+  <div class="wf__nav"><i class="wf__logo"></i><span class="wf__links"><i></i><i></i><i></i></span><i class="wf__cta"></i></div>
+  <div class="wf__hero"><i class="wf__h1"></i><i class="wf__h1 wf__h1--short"></i><i class="wf__p"></i><i class="wf__p wf__p--short"></i><i class="wf__btn"></i></div>
+  <div class="wf__media"></div>
+  <div class="wf__grid"><div class="wf__card"><i class="wf__thumb"></i><i class="wf__t"></i><i class="wf__t wf__t--short"></i></div><div class="wf__card"><i class="wf__thumb"></i><i class="wf__t"></i><i class="wf__t wf__t--short"></i></div><div class="wf__card"><i class="wf__thumb"></i><i class="wf__t"></i><i class="wf__t wf__t--short"></i></div></div>
+  <div class="wf__split"><div class="wf__media wf__media--sq"></div><div class="wf__copy"><i class="wf__h2"></i><i class="wf__p"></i><i class="wf__p"></i><i class="wf__p wf__p--short"></i><i class="wf__btn wf__btn--ghost"></i></div></div>
+  <div class="wf__band"><i class="wf__h2"></i><i class="wf__p wf__p--center"></i></div>
+  <div class="wf__grid"><div class="wf__card"><i class="wf__thumb"></i><i class="wf__t"></i><i class="wf__t wf__t--short"></i></div><div class="wf__card"><i class="wf__thumb"></i><i class="wf__t"></i><i class="wf__t wf__t--short"></i></div><div class="wf__card"><i class="wf__thumb"></i><i class="wf__t"></i><i class="wf__t wf__t--short"></i></div></div>
+  <div class="wf__foot"><i class="wf__logo"></i><span class="wf__links"><i></i><i></i><i></i><i></i></span></div>
+</div><div class="wf__page">
+  <div class="wf__nav"><i class="wf__logo"></i><span class="wf__links"><i></i><i></i><i></i></span><i class="wf__cta"></i></div>
+  <div class="wf__hero"><i class="wf__h1"></i><i class="wf__h1 wf__h1--short"></i><i class="wf__p"></i><i class="wf__p wf__p--short"></i><i class="wf__btn"></i></div>
+  <div class="wf__media"></div>
+  <div class="wf__grid"><div class="wf__card"><i class="wf__thumb"></i><i class="wf__t"></i><i class="wf__t wf__t--short"></i></div><div class="wf__card"><i class="wf__thumb"></i><i class="wf__t"></i><i class="wf__t wf__t--short"></i></div><div class="wf__card"><i class="wf__thumb"></i><i class="wf__t"></i><i class="wf__t wf__t--short"></i></div></div>
+  <div class="wf__split"><div class="wf__media wf__media--sq"></div><div class="wf__copy"><i class="wf__h2"></i><i class="wf__p"></i><i class="wf__p"></i><i class="wf__p wf__p--short"></i><i class="wf__btn wf__btn--ghost"></i></div></div>
+  <div class="wf__band"><i class="wf__h2"></i><i class="wf__p wf__p--center"></i></div>
+  <div class="wf__grid"><div class="wf__card"><i class="wf__thumb"></i><i class="wf__t"></i><i class="wf__t wf__t--short"></i></div><div class="wf__card"><i class="wf__thumb"></i><i class="wf__t"></i><i class="wf__t wf__t--short"></i></div><div class="wf__card"><i class="wf__thumb"></i><i class="wf__t"></i><i class="wf__t wf__t--short"></i></div></div>
+  <div class="wf__foot"><i class="wf__logo"></i><span class="wf__links"><i></i><i></i><i></i><i></i></span></div>
+</div></div></div></figure>
+        <h3 class="caps__title">Web</h3>
+        <ul class="caps__list">
+          <li>Design systems</li>
+          <li>Production CSS</li>
+          <li>End-to-end build</li>
+          <li>Landing pages</li>
+          <li>Email templates</li>
+          <li>Campaign emails</li>
+        </ul>
+      </article>
+      <article class="caps__item" data-el>
+        <figure class="caps__shot caps__shot--wire caps__shot--flow" aria-label="A product flow wireframe: three small screens on a dotted canvas, a list, a detail and a checkout, joined by a path that a dot travels along on a loop."><div class="fl" aria-hidden="true">
+  <svg class="fl__path" viewBox="0 0 100 100" preserveAspectRatio="none"><path id="flp" d="M22 30 C 45 30, 40 52, 56 52 S 75 72, 82 74" fill="none"/><circle class="fl__dot" r="1.8"><animateMotion dur="5s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.1;0.8;1" calcMode="linear"><mpath href="#flp"/></animateMotion></circle></svg>
+  <div class="fl__screen fl__screen--a"><i class="fl__bar"></i><i class="fl__row"></i><i class="fl__row"></i><i class="fl__row fl__row--on"></i><i class="fl__row"></i></div>
+  <div class="fl__screen fl__screen--b"><i class="fl__bar"></i><i class="fl__img"></i><i class="fl__l"></i><i class="fl__l fl__l--short"></i><i class="fl__btn"></i></div>
+  <div class="fl__screen fl__screen--c"><i class="fl__bar"></i><i class="fl__l"></i><i class="fl__field"></i><i class="fl__field"></i><i class="fl__btn"></i></div>
+</div></figure>
+        <h3 class="caps__title">Product</h3>
+        <ul class="caps__list">
+          <li>Flows and wireframes</li>
+          <li>Working prototypes</li>
+          <li>Interface design</li>
+          <li>Dashboards</li>
+          <li>Checkout and account</li>
+          <li>Component libraries</li>
+        </ul>
+      </article>
+      <article class="caps__item" data-el>
+        <figure class="caps__shot caps__shot--wire caps__shot--set" aria-label="A stationery set in wireframe: a tall letterhead sheet with the mark and text lines, a business card overlapping its corner, and a round sticker of the mark."><div class="st" aria-hidden="true">
+  <div class="st__letter"><span class="st__mark st__mark--sm"><i class="st__ma"></i><i class="st__mb"></i></span><i class="st__l st__l--w"></i><i class="st__l"></i><i class="st__l"></i><i class="st__l st__l--short"></i><i class="st__gap"></i><i class="st__l"></i><i class="st__l"></i><i class="st__l st__l--short"></i><i class="st__gap"></i><i class="st__l st__l--sig"></i></div>
+  <div class="st__card"><span class="st__mark st__mark--md"><i class="st__ma"></i><i class="st__mb"></i></span><span class="st__cardlines"><i class="st__l st__l--name"></i><i class="st__l st__l--short"></i></span></div>
+  <div class="st__badge"><span class="st__mark st__mark--lg"><i class="st__ma"></i><i class="st__mb"></i></span></div>
+</div></figure>
+        <h3 class="caps__title">Branding</h3>
+        <ul class="caps__list">
+          <li>Identity systems</li>
+          <li>Logo and wordmark</li>
+          <li>Type and colour</li>
+          <li>Art direction</li>
+          <li>Campaign concepts</li>
+          <li>Brand guidelines</li>
+        </ul>
+      </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== ACCOMPLISHMENTS ===== -->
+  <!-- PLACEHOLDER CONTENT. Every row is a stand-in with the shape of a real
+       entry, not a real award. Row 02 and 04 show the multi-value form, where
+       one award covers several categories; row 01 and 03 show the single form.
+       Replace the name, project, category and year on each before this goes
+       live, and delete any row you do not need.
+       The list is an <ol>: these are ranked entries, and the numbers in the
+       first column are the list's own order, not decoration. -->
+  <section class="sec shell acc" id="accomplishments" data-seq>
+    <div class="secHead secHead--stack">
+      <p class="secHead__tag" data-el>By the numbers</p>
+      <h2 data-el data-split>Accomplishments</h2>
+    </div>
+
+    <ol class="acc__list">
+      <li class="acc__row" data-el>
+        <p class="acc__no">01</p>
+        <h3 class="acc__name">Newsletters that sell</h3>
+        <div class="acc__cell"><p class="acc__label">Company</p><p class="acc__val">Spigen</p></div>
+        <div class="acc__cell">
+          <p class="acc__label">Measure</p>
+          <p class="acc__val">+12–18% CTR</p>
+          <p class="acc__val">+6–10% CVR</p>
+          <p class="acc__val">+$0.20–0.45 RPS</p>
+        </div>
+        <div class="acc__cell acc__cell--year"><p class="acc__label">Year</p><p class="acc__val">2025</p></div>
+      </li>
+      <li class="acc__row" data-el>
+        <p class="acc__no">02</p>
+        <h3 class="acc__name">Launch page for Apple’s first foldable</h3>
+        <div class="acc__cell"><p class="acc__label">Company</p><p class="acc__val">Spigen</p></div>
+        <div class="acc__cell">
+          <p class="acc__label">Measure</p>
+          <p class="acc__val">Launches 23 Oct</p>
+        </div>
+        <div class="acc__cell acc__cell--year"><p class="acc__label">Year</p><p class="acc__val">2026</p></div>
+      </li>
+      <li class="acc__row" data-el>
+        <p class="acc__no">03</p>
+        <h3 class="acc__name">20 websites in 20 months</h3>
+        <div class="acc__cell"><p class="acc__label">Company</p><p class="acc__val">BOS Media Group</p></div>
+        <div class="acc__cell">
+          <p class="acc__label">Measure</p>
+          <p class="acc__val">20+ sites</p>
+        </div>
+        <div class="acc__cell acc__cell--year"><p class="acc__label">Year</p><p class="acc__val">2022</p></div>
+      </li>
+      <li class="acc__row" data-el>
+        <p class="acc__no">04</p>
+        <h3 class="acc__name">A Monster campaign Monster didn’t ask for</h3>
+        <div class="acc__cell"><p class="acc__label">Company</p><p class="acc__val">Monster</p></div>
+        <div class="acc__cell">
+          <p class="acc__label">Measure</p>
+          <p class="acc__val">5 monsters, 5 flavours</p>
+          <p class="acc__val">0 lawsuits</p>
+        </div>
+        <div class="acc__cell acc__cell--year"><p class="acc__label">Year</p><p class="acc__val">2026</p></div>
+      </li>
+      <li class="acc__row" data-el>
+        <p class="acc__no">05</p>
+        <h3 class="acc__name">Riot’s champion page, redrawn</h3>
+        <div class="acc__cell"><p class="acc__label">Company</p><p class="acc__val">Riot Games</p></div>
+        <div class="acc__cell">
+          <p class="acc__label">Measure</p>
+          <p class="acc__val">1 champion, fully explained</p>
+          <p class="acc__val">Riot: no comment</p>
+        </div>
+        <div class="acc__cell acc__cell--year"><p class="acc__label">Year</p><p class="acc__val">2026</p></div>
+      </li>
+    </ol>
+  </section>
+
+</main>
+
+<footer class="contact" id="contact">
+  <div class="shell sec" data-seq>
+    <div>
+      <h2 data-el data-split>Got something you want to get right?</h2>
+      <p class="lede" data-el>Tell me what you're building. I read everything and reply to most of it.</p>
+      <a class="mail" data-el href="mailto:trandkevin@gmail.com">trandkevin@gmail.com</a>
+    </div>
+  </div>
+  <div class="shell">
+    <div class="foot">
+      <p>©2026 Kevin Tran</p>
+      <ul>
+        <li><a href="https://www.linkedin.com/in/kvntrn/" target="_blank" rel="noopener">LinkedIn</a></li>
+        <li><a href="#">Résumé</a></li>
+      </ul>
+    </div>
+  </div>
+</footer>
+</div><!-- /#view -->
+
+<script>
+(function(){
+  var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var view   = document.getElementById('view');
+  var root   = document.documentElement;
+
+  /* ---------- moving tiles ----------
+     preload="none" and no autoplay in the markup, so a tile costs nothing until
+     it is on screen and nothing at all to someone who asked for less motion.
+     Paused again on the way out rather than left decoding under the fold: this
+     grid can hold several, and a video that has scrolled past is a decoder
+     running for no one. The poster is the still that used to be the tile, so
+     every path that does not play — reduced motion, no JS, a codec neither
+     source satisfies — lands exactly where the page was before. */
+  (function(){
+    var clips = document.querySelectorAll('.job__clip');
+    if (!clips.length || reduce || !('IntersectionObserver' in window)) return;
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        var v = e.target;
+        if (e.isIntersecting){
+          if (v.preload !== 'auto') v.preload = 'auto';
+          var pr = v.play();
+          if (pr && pr.catch) pr.catch(function(){});
+        } else {
+          v.pause();
+        }
+      });
+    }, { threshold:0.25 });
+    [].forEach.call(clips, function(v){ io.observe(v); });
+  })();
+
+  /* ---------- theme toggle ---------- */
+  var btn = document.getElementById('themeBtn');
+  var themeMeta = document.querySelectorAll('meta[name="theme-color"]');
+  function applyTheme(t, persist){
+    root.dataset.theme = t;
+    var dark = t === 'dark';
+    btn.setAttribute('aria-pressed', dark ? 'true' : 'false');
+    btn.setAttribute('aria-label', dark ? 'Switch to light mode' : 'Switch to dark mode');
+    // keep the browser chrome in step
+    themeMeta.forEach(function(m){ m.setAttribute('content', dark ? '#0e0f11' : '#ffffff'); });
+    if (persist) { try { localStorage.setItem('kt-theme', t); } catch(e){} }
+  }
+  applyTheme(root.dataset.theme || 'light', false);
+
+  /* The swap is wiped in from the button as an expanding circle. The View
+     Transitions API does the heavy lifting: it snapshots the page before the
+     change and again after, and all this has to do is clip the new snapshot to
+     a circle growing out of the button. Where the API is missing — or motion is
+     turned down — the swap just happens, which is what it did before. */
+  function wipeTheme(next){
+    if (reduce || !document.startViewTransition){ applyTheme(next, true); return; }
+    var r = btn.getBoundingClientRect();
+    var x = r.left + r.width / 2, y = r.top + r.height / 2;
+    /* far enough to clear the most distant corner of the viewport */
+    var end = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
+    /* The page's own 320ms colour transitions would otherwise run inside the
+       new snapshot, so the circle would reveal a page that is itself still
+       fading. Held off until the wipe is done. */
+    root.classList.add('theming');
+    var vt = document.startViewTransition(function(){ applyTheme(next, true); });
+    vt.ready.then(function(){
+      root.animate(
+        { clipPath: ['circle(0px at ' + x + 'px ' + y + 'px)',
+                     'circle(' + end + 'px at ' + x + 'px ' + y + 'px)'] },
+        /* A circle sweeps as the square of its radius, so a hard ease-out on the
+           radius makes the edge tear across early and then crawl into the
+           corners. This curve holds more of the radius back for the first
+           quarter and hands the rest over gradually — measured on area covered,
+           it goes 0.16 / 0.63 / 0.88 / 0.98 at each fifth instead of 0.24 /
+           0.61 / 0.87 / 0.98 — and the longer run gives the tail room to
+           settle rather than stop. */
+        { duration: 780, easing: 'cubic-bezier(.37,.62,.25,1)',
+          pseudoElement: '::view-transition-new(root)' }
+      );
+    });
+    vt.finished.then(function(){ root.classList.remove('theming'); },
+                     function(){ root.classList.remove('theming'); });
+  }
+
+  btn.addEventListener('click', function(){
+    wipeTheme(root.dataset.theme === 'dark' ? 'light' : 'dark');
+  });
+
+  /* ---------- hero entrance ----------
+     GRAPHIC / DESIGNER are split into .ch letters so they cascade the way
+     the section headings do, rather than sliding as two solid blocks. The
+     ladder restarts on each line: G and D leave together, R and E together,
+     and so on, so the two words read as one move arriving in parallel rather
+     than one long queue that takes twice as long to clear.
+     That is a deliberate departure from how a multi-line [data-split] heading
+     behaves further down the page, where the count runs straight through and
+     line two picks up where line one left off. At body and section-heading size
+     the continuous run is right — it is one sentence. Here the two words are
+     stacked, the same size, and read as a unit, so staggering the second behind
+     the first made the second look late rather than sequenced.
+     Each word is a single line by construction, so unlike splitLines() this
+     never needs re-running on resize or after the webfont swaps in. */
+  /* Read by the scroll loop: the split letters, and the moment the entrance has
+     finished so the exit can take them over without snapping mid-flight. */
+  var heroChars = [], heroEntranceEnd = 0, heroT0 = 0;
+
+  (function heroType(){
+    var h1 = document.querySelector('.hero__type');
+    if (!h1 || reduce) return;
+    var cs   = getComputedStyle(document.documentElement);
+    var step = parseFloat(cs.getPropertyValue('--hero-type-step')) || 52;
+    /* The longest line, not the total count. The entrance now ends when the
+       slowest ladder finishes, and the two run at once — so timing it off the
+       combined length would leave the scroll exit waiting on letters that
+       stopped moving a word ago. */
+    var longest = 0;
+    [].slice.call(h1.querySelectorAll('.mask > span')).forEach(function(span){
+      var word = span.textContent.trim();
+      span.innerHTML = word.split('').map(function(ch){
+        return '<span class="ch">' + ch + '</span>';
+      }).join('');
+      var i = 0;
+      [].slice.call(span.children).forEach(function(el){
+        /* calc() keeps the hold in CSS, so --hero-hold stays the single knob */
+        el.style.transitionDelay = 'calc(var(--hero-hold) + ' + (i++ * step) + 'ms)';
+      });
+      if (i > longest) longest = i;
+    });
+    /* The split leaves one <span class="ch"> per letter, which some screen
+       readers spell out. The label restores the headline as two words — and
+       has to match the visible text, or the page announces something the
+       page does not say. */
+    h1.setAttribute('aria-label', 'Graphic Designer');
+
+    heroChars = [].slice.call(h1.querySelectorAll('.ch'));
+    var hold   = parseFloat(cs.getPropertyValue('--hero-hold')) || 460;
+    var travel = parseFloat(cs.getPropertyValue('--hero-type-travel')) || 720;
+    heroEntranceEnd = hold + Math.max(0, longest - 1) * step + travel;
+  })();
+
+  requestAnimationFrame(function(){
+    document.getElementById('hero').classList.add('ready');
+    heroT0 = performance.now();          /* clock the entrance from here */
+  });
+
+  /* ---------- lerped smooth scroll (desktop, fine pointer) ---------- */
+  var smooth = !reduce
+            && matchMedia('(min-width: 861px)').matches
+            && matchMedia('(pointer: fine)').matches;
+  var current = 0, target = 0, ease = 0.09;
+
+  function setBodyHeight(){ document.body.style.height = view.getBoundingClientRect().height + 'px'; }
+  if (smooth) {
+    root.classList.add('smooth');
+    setBodyHeight();
+    if ('ResizeObserver' in window) new ResizeObserver(setBodyHeight).observe(view);
+    addEventListener('resize', setBodyHeight);
+    document.querySelectorAll('img').forEach(function(im){
+      if (!im.complete) im.addEventListener('load', setBodyHeight, {once:true});
+    });
+  }
+
+  /* ---------- statement ---------- */
+  /* Lit one letter at a time, not one word. The <w> wrapper stays — it is what
+     keeps a word from breaking across lines, since the letters inside are
+     separate elements — and each letter goes in as its own <c>. The paint loop
+     below walks these rather than the words. */
+  var lit = document.querySelector('[data-lit-text]'), litChars = [];
+  if (lit) {
+    var parts = lit.textContent.trim().split(/\s+/);
+    lit.textContent = '';
+    parts.forEach(function(t){
+      var w = document.createElement('w');
+      for (var i = 0; i < t.length; i++){
+        var c = document.createElement('c'); c.textContent = t.charAt(i);
+        w.appendChild(c);
+      }
+      lit.appendChild(w); lit.appendChild(document.createTextNode(' '));
+    });
+    litChars = [].slice.call(lit.querySelectorAll('c'));
+    lit.setAttribute('aria-label', parts.join(' '));
+    if (reduce) litChars.forEach(function(c){ c.style.setProperty('--p', '1'); });
+  }
+  /* How many characters wide the mix band is — the whole look of the move.
+     Around a word and a half at this measure: wide enough to read as a blend
+     rather than a cut, tight enough that the sentence still resolves left to
+     right instead of the whole paragraph brightening at once. */
+  var LIT_BAND = 10;
+  /* Where the sweep starts and ends, as fractions of viewport height measured
+     against the block's top and bottom edges. 0.80 means it begins once the top
+     of the statement is four fifths of the way up the screen; 0.35 means it is
+     finished by the time the bottom has risen past the upper third. */
+  var LIT_IN = 0.80, LIT_OUT = 0.50;
+  var litTop = 0, litH = 0;
+  var litPin = document.querySelector('#litTrack .lit__pin');
+  var litTrackTop = 0, litTravel = 0;   /* travel > 0 means the section pins */
+  function measureLit(){
+    if (!litTrack) return;
+    var el = document.querySelector('.lit p[data-lit-text]') || litTrack;
+    var dt = function(n){ var t = 0; while (n){ t += n.offsetTop; n = n.offsetParent; } return t; };
+    litTop = dt(el);
+    litH   = el.offsetHeight;
+    litTrackTop = dt(litTrack);
+    litTravel = litPin ? Math.max(0, litTrack.offsetHeight - litPin.offsetHeight) : 0;
+    if (litPin && !litTravel && litPin.style.transform) litPin.style.transform = '';
+  }
+  /* The scroll position at which the sweep completes, in either mode. */
+  function litDoneAt(vh){
+    return litTravel > 0 ? litTrackTop + litTravel : litTop + litH - vh * LIT_OUT;
+  }
+  /* Last value written per letter, so an unchanged letter costs nothing, and the
+     bounds of last frame's band. Seeded to the full range so the first frame
+     writes every letter once and none are left unset. */
+  var litLast = [], litA = 0, litB = litChars.length ? litChars.length - 1 : 0;
+
+  /* Nothing carries [data-par] since the work grid went to hover-zoom tiles:
+     this loop writes an inline transform every frame, and an inline transform
+     beats the stylesheet, so it would have silently cancelled the hover scale.
+     The loop is left in place — re-add the attribute to opt an element back in,
+     but give it its own layer rather than the element the scale is on. */
+  var pars = [].slice.call(document.querySelectorAll('[data-par]'));
+  var heroEl   = document.getElementById('hero');
+  var litTrack = document.getElementById('litTrack');
+  var toTop     = document.getElementById('toTop');
+  var heroTrack = document.getElementById('heroTrack');
+  var heroCard  = document.querySelector('.hero__card');
+  var corners   = document.querySelector('.hero__corners');
+
+  /* Hoisted rather than declared inside frame(): both are wanted by the panel
+     reveal below as well, and neither should be rebuilt sixty times a second. */
+  function clamp01(v){ return v < 0 ? 0 : v > 1 ? 1 : v; }
+  function outCubic(v){ return 1 - Math.pow(1 - v, 3); }
+
+  /* Headline exit, in fractions of the first viewport of scroll. HERO_OUT is how
+     much scroll the whole cascade spans; HERO_OUT_BAND is the share of that any
+     one letter takes, so the smaller it is the more separated the letters read.
+     HERO_OUT_RISE matches the 115% the section headings travel. */
+  var HERO_OUT = 0.50, HERO_OUT_BAND = 0.52, HERO_OUT_RISE = 115;
+  var heroScrub = false, nowMs = 0;
+
+  /* How far the portrait must travel to sit dead centre once the type clears,
+     and how much to grow it. Measured from layout, so it holds at any size. */
+  /* Two scales, chosen at paint time. flankFlow is set by measureFlank(), which
+     runs after this, so the pick can't happen here. */
+  var cardLift = 0, cardFillX = 1, cardFillY = 1, cardScaleInline = 1;
+  /* The frame's second end state. Once the portrait has reached full bleed it
+     keeps going: it eases back off the viewport edge onto the page's own
+     gutter, so it hands over to the sections below as an inset card sitting on
+     the same margin as every other block rather than as an edge-to-edge image.
+     Measured, not guessed — the inset is whatever --gut currently resolves to,
+     read off the hero's own padding so it tracks the token at every width. */
+  var cardInsetX = 1, cardInsetY = 1;
+  /* Where the settle runs, in viewports of raw scroll. It no longer picks up
+     the instant the growth finishes — the portrait holds at full bleed for a
+     fifth of a viewport first, so the arrival reads as an arrival rather than
+     as a bounce, and the copy has landed (0.80) and been read against the
+     full-frame image before the frame moves again. The whole move is done by
+     1.17, inside the pin, so the card is at rest on the gutter for a beat
+     before the composition scrolls away.
+     These run past 1.0 on purpose and are measured against an unclamped scroll
+     fraction — every other phase on the hero is capped at one viewport. */
+  var CARD_SETTLE_IN = 0.95, CARD_SETTLE_SPAN = 0.22;
+  /* The frame's resting size, needed in the loop to work out how much the
+     image has to cover at any point in the expansion. */
+  var imgW0 = 0, imgH0 = 0, cw0 = 0, ch0 = 0;
+  var cardImg = heroCard ? heroCard.querySelector('img') : null;
+  function measureCard(){
+    if (!heroCard || !heroEl) return;
+    /* Measured from offsetTop/offsetHeight, which ignore transforms entirely.
+       The earlier version read getBoundingClientRect() with the transforms
+       temporarily blanked, which meant setting transition:'none' on the
+       wrapper — and doing that mid-delay cancelled the portrait's fade-in for
+       good, because this runs again on load and on fonts.ready. Reading layout
+       needs no such suppression, so the entrance survives. */
+    var cardTop = docTop(heroCard) - docTop(heroEl);
+    /* Computed style, not offsetWidth/offsetHeight. Both are wanted for the same
+       reason — they ignore transforms, and this runs while the card may already
+       be scaled — but offset* rounds to whole pixels, and these numbers are
+       divisors for the fill scale. A 187 standing in for 186.67 left the frame
+       2px short of the viewport at full bleed; at 1280x1024 it overshot by 4.
+       getComputedStyle is unrounded and equally transform-blind. */
+    var hh = parseFloat(getComputedStyle(heroEl).height)  || heroEl.offsetHeight;
+    var hw = parseFloat(getComputedStyle(heroEl).width)   || heroEl.offsetWidth;
+    var cs = getComputedStyle(heroCard);
+    var ch = parseFloat(cs.height) || heroCard.offsetHeight;
+    var cw = parseFloat(cs.width)  || heroCard.offsetWidth;
+    if (!hh || !ch || !cw) return;
+    cardLift  = hh / 2 - (cardTop + ch / 2);
+    /* The frame is a fixed 3:4 window now, so the growth is no longer a single
+       uniform scale — the end state has to become the viewport's shape. Two
+       axes, measured to fill rather than contain: at full the frame is exactly
+       the hero, edge to edge, with nothing left over on either axis. */
+    cw0 = cw; ch0 = ch;
+    cardFillX = hw / cw;
+    cardFillY = hh / ch;
+    /* The same two axes, one gutter short on each side. The card is centred in
+       the hero on both axes — horizontally by the wrapper's auto margins inside
+       a symmetric padding box, vertically by cardLift — so pulling the same
+       amount off each scale insets it evenly without any extra translation.
+       Floored at the fill scale so a freak measurement can never make the
+       settle grow the frame instead of shrinking it. */
+    var gut = parseFloat(getComputedStyle(heroEl).paddingLeft) || 0;
+    cardInsetX = Math.max(1, (hw - gut * 2) / cw);
+    cardInsetY = Math.max(1, (hh - gut * 2) / ch);
+    /* The image's own layout box inside that frame, at its natural proportions.
+       Whichever axis is matched to the frame, the other overflows and is
+       clipped — which is what cover means, done by hand so it can be recomputed
+       against the frame's *current* shape on every frame instead of being fixed
+       to the resting one. */
+    if (cardImg && cardImg.naturalWidth && cardImg.naturalHeight){
+      var arSrc = cardImg.naturalWidth / cardImg.naturalHeight;
+      if (arSrc >= cw / ch){                 /* wider than the frame: match height */
+        cardImg.style.height = '100%'; cardImg.style.width = 'auto';
+        imgH0 = ch; imgW0 = ch * arSrc;
+      } else {                               /* taller than the frame: match width */
+        cardImg.style.width = '100%'; cardImg.style.height = 'auto';
+        imgW0 = cw; imgH0 = cw / arSrc;
+      }
+    }
+    cardScaleInline = Math.min(4.0, (hh * 0.56) / ch);
+    /* --cardW sizes the middle column of the flank grid, and it deliberately
+       stays on the old 0.56-of-the-hero measure rather than the fill scale.
+       Handing it the fill scale would make the middle column the entire
+       viewport and squeeze the copy out of column one altogether. The column is
+       a positioning fiction now that the image is full bleed — its only job is
+       holding the copy exactly where it sat before. */
+    if (heroTrack) {
+      heroTrack.style.setProperty('--cardW',
+        Math.round(cw * cardScaleInline) + 'px');
+    }
+  }
+  measureCard();
+  addEventListener('resize', measureCard);
+  window.addEventListener('load', measureCard);
+  /* Archivo swapping in changes the headline's height and therefore the card's
+     resting position, so re-measure once the webfonts have settled. */
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(measureCard);
+  setTimeout(measureCard, 1600);      /* after the entrance completes */
+
+  /* ---- the two panels either side of the portrait ----
+     FLANK_IN is where they start arriving, measured in viewports of scroll;
+     FLANK_SPAN is how much scroll the whole cascade spans and FLANK_BAND the
+     share of that any one element takes, so a smaller band separates them more.
+     FLANK_RISE matches the 64px every [data-el] on the page travels.
+     FLANK_IN is derived from the headline exit rather than set on its own, so
+     the handover stays put if HERO_OUT is ever retuned. At 0.80 of the exit the
+     first half of the cascade has already cleared its mask but DESIGNER's back
+     letters are still mid-whip — the quadratic ease holds them low until late —
+     so the copy starts rising into a headline that is still leaving. The two
+     moves read as one continuous cascade instead of two events with a beat of
+     dead scroll between them. */
+  var FLANK_IN = HERO_OUT * 0.80;     /* ≈ 0.50 of the first viewport */
+  var FLANK_SPAN = 0.40, FLANK_BAND = 0.55, FLANK_RISE = 64;
+  /* Within one panel element's own slice of the cascade, the share a single
+     letter takes. Kept equal to CHAR_BAND further down so the intro headline
+     cascades at the same rate as every other [data-split] heading on the page.
+     Declared here rather than reused because the rAF loop starts before that
+     block runs, and a hoisted-but-unassigned var would paint NaN on frame one. */
+  var FLANK_CHAR_BAND = 0.46;
+  var flank    = document.getElementById('heroFlank');
+  var flankEls = [].slice.call(document.querySelectorAll('.flankEl'));
+
+  /* Elements that were split into per-letter masks animate their letters; the
+     rest still rise and fade as a block. Re-read after every re-split, because
+     splitLines throws the old .ch nodes away and leaves these pointing at
+     detached spans that will never be seen again. */
+  var flankData = [];
+  function measureFlankChars(){
+    flankData = flankEls.map(function(el){
+      return { el: el, chars: [].slice.call(el.querySelectorAll('.ch')) };
+    });
+  }
+  measureFlankChars();
+
+  /* Overlaid and pinned, or back in normal flow? The CSS decides at 900px and
+     everything here follows it rather than re-testing the breakpoint. */
+  var flankFlow = true;
+  function measureFlank(){
+    flankFlow = !flank || getComputedStyle(flank).position !== 'absolute';
+    /* The paint loop clears this too, but it is gated on reduced motion being
+       off; clearing here covers the case where the loop never runs again. */
+    if (flank && flankFlow && flank.style.transform) flank.style.transform = '';
+  }
+  measureFlank();
+  addEventListener('resize', measureFlank);
+
+  function setFlank(d, p){
+    var n = d.chars.length;
+    if (n){
+      /* The letters own the motion now, so the element itself has to stop
+         hiding them — same handover [data-el].split makes in CSS. */
+      d.el.style.opacity   = 1;
+      d.el.style.transform = 'none';
+      for (var i = 0; i < n; i++){
+        var off = (1 - FLANK_CHAR_BAND) * (n > 1 ? i / (n - 1) : 0);
+        var ec  = outCubic(clamp01((p - off) / FLANK_CHAR_BAND));
+        d.chars[i].style.transform = 'translateY(' + ((1 - ec) * 115).toFixed(2) + '%)';
+      }
+      return;
+    }
+    var e = outCubic(p);
+    d.el.style.transform = 'translate3d(0,' + ((1 - e) * FLANK_RISE).toFixed(1) + 'px,0)';
+    d.el.style.opacity   = e.toFixed(3);
+  }
+
+  function paintFlank(yv, vh){
+    var n = flankData.length;
+    if (!n) return;
+    if (flankFlow) {
+      /* Not pinned, so each element reveals off its own position on screen —
+         exactly the way every other section on the page does. */
+      var start = vh * REV_START, span = start - vh * REV_END;
+      for (var i = 0; i < n; i++){
+        setFlank(flankData[i],
+          clamp01((start - flankData[i].el.getBoundingClientRect().top) / span));
+      }
+      return;
+    }
+    /* Pinned: a pinned element's position on the page no longer tracks the
+       screen, so progress comes from the hero's own scroll instead. */
+    var pF = clamp01((yv - FLANK_IN) / FLANK_SPAN);
+    for (var j = 0; j < n; j++){
+      var off = (1 - FLANK_BAND) * (n > 1 ? j / (n - 1) : 0);
+      setFlank(flankData[j], clamp01((pF - off) / FLANK_BAND));
+    }
+  }
+
+  /* ---- idle gate ----
+     Everything below this point is a pure function of scroll position and of
+     the measurements the resize handlers cache, so when neither has changed
+     since the last frame the work is a no-op with a cost: roughly a dozen
+     getBoundingClientRect reads per frame, forever, on a page that is sitting
+     still. The loop keeps ticking — rAF itself is cheap and re-arming it on
+     scroll would drop the first frame of a flick — but the body is skipped.
+     Three things unstick it. `dirty` covers resize and load, where the
+     geometry moved underneath a scroll position that did not. The lerp is
+     allowed to finish, since `current` keeps moving after `scrollY` stops.
+     And the hero's entrance-to-scrub handover ramps on a clock rather than on
+     scroll, so the first beat after the entrance is never gated. */
+  var lastY = null, dirty = true;
+  addEventListener('resize', function(){ dirty = true; }, { passive:true });
+  addEventListener('load',   function(){ dirty = true; });
+
+  function frame(){
+    if (smooth) {
+      target = scrollY;
+      current += (target - current) * ease;
+      if (Math.abs(target - current) < 0.08) current = target;
+      view.style.transform = 'translate3d(0,' + (-current).toFixed(2) + 'px,0)';
+    }
+    var yNow = smooth ? current : scrollY;
+    if (!dirty && yNow === lastY && (!smooth || current === target)
+        && !(heroChars.length && performance.now() - heroT0 < heroEntranceEnd + 300)){
+      requestAnimationFrame(frame);
+      return;
+    }
+    lastY = yNow; dirty = false;
+    var vh = innerHeight;
+    /* one scroll position for everything, whether the lerp is running or not */
+    var y = smooth ? current : scrollY;
+
+    /* ---- hero pin ----
+       #view is translated by -y, so translating the hero by +y cancels that out
+       and it appears to hold still. The pin lasts one viewport short of the
+       track, so the composition is released in time to scroll away under its own
+       steam and the statement section never overlaps it.
+       In flow there is no pin at all. Holding the hero still while the panel
+       below it scrolled was exactly what made that panel ride up over the
+       portrait; unpinned, the two move together and the copy stays where the
+       document puts it — underneath.
+       Translate only — no scale, no fade. The hero stays flat. */
+    if (!reduce && heroEl && heroTrack) {
+      var trackH  = heroTrack.offsetHeight;
+      var pinSpan = flankFlow ? 0 : Math.max(0, trackH - vh);
+      var pin = y < pinSpan ? y : pinSpan;
+      heroEl.style.transform = pin === 0
+        ? 'none' : 'translate3d(0,' + pin.toFixed(2) + 'px,0)';
+      /* The panels are pinned with it, so they take the same offset.
+         Written on every frame in both states rather than only while pinned:
+         skipping the write left the last pinned offset — up to 190svh minus a
+         viewport — sitting on the element after a resize down out of the
+         overlay. In flow that pushed the whole intro block down the page,
+         which opened a screen of dead white under the portrait and dropped the
+         copy on top of the statement section below it. */
+      if (flank) flank.style.transform = (flankFlow || pin === 0)
+        ? 'none' : 'translate3d(0,' + pin.toFixed(2) + 'px,0)';
+
+      /* ---- Phase A choreography, across the first viewport of scroll ----
+         the type parts and clears, the corner marks lift away, and the portrait
+         rises and grows into the middle. Done by 0.75vh, which is where About
+         starts sliding up — see the .heroTrack height. */
+      var pA = vh > 0 ? y / vh : 0;
+      /* Kept before the cap. Every phase in this block finishes inside the
+         first viewport and is clamped to it, but the settle deliberately runs
+         past 1.0, and against a capped pA it would freeze the instant the
+         scroll crossed one viewport. */
+      var pFree = pA < 0 ? 0 : pA;
+      pA = pA < 0 ? 0 : pA > 1 ? 1 : pA;
+      var pt = outCubic(clamp01(pA / 0.42));
+      if (corners) { corners.style.transform = 'translate3d(0,' + (pt * 22).toFixed(2) + 'vh,0)';
+                     corners.style.opacity = (1 - clamp01(pA / 0.28)).toFixed(3); }
+
+      /* ---- headline exit: letter by letter, up and out of the mask ----
+         The same mechanic every [data-split] heading further down the page uses
+         to arrive, run the other way. Each letter rides up behind its line mask,
+         cascading left to right and continuously across both words — DESIGNER's
+         first letter follows GRAPHIC's last, exactly as the entrance does.
+         No fade: overflow:hidden on .mask does the hiding, which is what keeps
+         it reading as the same move as the rest of the page.
+         Anchored to scroll position, not time, so it scrubs backwards as
+         cleanly as it plays forwards. */
+      if (heroChars.length && (nowMs = performance.now()) - heroT0 >= heroEntranceEnd) {
+        if (!heroScrub){ heroEl.classList.add('scrub'); heroScrub = true; }
+        /* If the scroll started while the entrance was still running, the letters
+           sit behind where scroll says they should be. Ease into it over a beat
+           rather than jumping. Invisible in the ordinary case, where pOut is
+           still 0 for the whole of this ramp. */
+        var k    = clamp01((nowMs - heroT0 - heroEntranceEnd) / 280);
+        var pOut = clamp01(pA / HERO_OUT);
+        var nch  = heroChars.length;
+        for (var q = 0; q < nch; q++){
+          var offq = (1 - HERO_OUT_BAND) * (nch > 1 ? q / (nch - 1) : 0);
+          var pq   = clamp01((pOut - offq) / HERO_OUT_BAND);
+          /* Linear, not the quadratic ease-in this used to run. The portrait
+             grows on an outCubic, which is fastest at the very start: twenty
+             pixels of scroll took it 8.6% of the way while a squared letter had
+             covered 0.8% of its travel and read as motionless. Against a linear
+             ramp the first letter is 8.5% out at that same point, so the two
+             leave together and the move reads as one continuous thing. The
+             cascade is untouched — later letters still wait their turn through
+             HERO_OUT_BAND. */
+          heroChars[q].style.transform =
+            'translateY(' + (-pq * HERO_OUT_RISE * k).toFixed(2) + '%)';
+        }
+      }
+
+      /* Portrait rises to centre and expands — but only where it has somewhere
+         to go. In flow it is already laid out at its full size by the cardWrap
+         width rule, so scaling it here would mean shrinking it back down first
+         just to play the same growth over again. */
+      if (heroCard) {
+        if (flankFlow) {
+          if (heroCard.style.transform) heroCard.style.transform = '';
+          if (cardImg && cardImg.style.transform !== 'translate(-50%,-50%)')
+            cardImg.style.transform = 'translate(-50%,-50%)';
+        } else {
+          var pc = outCubic(clamp01(pA / 0.75));
+          /* Phase two, picked up a fifth of a viewport after the growth tops
+             out: the target the frame is scaling toward slides from full bleed
+             to one gutter inside it. Expressed as a moving target rather than
+             as a second transform so there is only ever one scale on the
+             element — pc is long since 1 by the time pS leaves 0, so the two
+             phases cannot disagree at the handover. */
+          var pS = outCubic(clamp01((pFree - CARD_SETTLE_IN) / CARD_SETTLE_SPAN));
+          var tx = cardFillX + (cardInsetX - cardFillX) * pS;
+          var ty = cardFillY + (cardInsetY - cardFillY) * pS;
+          /* Two axes: the frame starts 3:4 and ends the shape of the viewport.
+             This is the only thing on the page that changes an element's aspect,
+             and it only happens across this expansion. */
+          var sx = 1 + (tx - 1) * pc;
+          var sy = 1 + (ty - 1) * pc;
+          /* Rounded once, here, and used for both the frame and the image's
+             counter-scale. Rounding them independently let the two disagree in
+             the 5th decimal, which at 3440x1440 was half a pixel of letterbox
+             down the edge of an otherwise full-bleed image. */
+          sx = +sx.toFixed(5); sy = +sy.toFixed(5);
+          heroCard.style.transform = 'translate3d(0,' + (cardLift * pc).toFixed(2) + 'px,0) scale('
+                                   + sx + ',' + sy + ')';
+          /* A non-uniform scale would stretch the photograph with the frame, so
+             the image undoes it — scale(m/sx, m/sy) against the frame's (sx,sy)
+             leaves a net uniform m, which is a size change and not a distortion.
+             m is the cover factor for the frame's shape *at this instant*: the
+             larger of the two ratios, so the image always overflows the frame on
+             one axis and never falls short on either. That is what makes the
+             crop open up as the frame widens instead of staying fixed. */
+          if (cardImg && imgW0 && imgH0){
+            var needX = (cw0 * sx) / imgW0, needY = (ch0 * sy) / imgH0;
+            /* A hair over, so subpixel rasterising rounds the image outward past
+               the frame edge rather than a fraction short of it. */
+            var m = (needX > needY ? needX : needY) * 1.0008;
+            cardImg.style.transform = 'translate(-50%,-50%) scale('
+                                    + (m / sx).toFixed(5) + ',' + (m / sy).toFixed(5) + ')';
+          }
+          /* The corner is scaled along with the frame, so 10px reads as tens
+             of pixels of rounding in the viewport corners. Taken to 0 across
+             the growth for a clean edge-to-edge end state, then back up to the
+             page's own --r as the card settles onto the gutter — an inset card
+             with square corners would read as a crop, not as a card.
+             Written as the two-value `h / v` form and divided by each axis's
+             own scale, because a single px radius on a non-uniformly scaled box
+             renders as an ellipse: at full bleed sx is ~6x sy, so one number
+             would come out six times wider than it is tall. */
+          var rVis = 10 * (1 - pc) + 8 * pS * pc;
+          heroCard.style.borderRadius = (rVis / sx).toFixed(3) + 'px / '
+                                      + (rVis / sy).toFixed(3) + 'px';
+        }
+      }
+
+      /* headline and copy arrive as the hero type is still leaving */
+      paintFlank(vh > 0 ? y / vh : 0, vh);
+    } else if (!reduce) {
+      /* Panels in flow below the breakpoint still need painting, and the branch
+         above is gated on the hero being present. */
+      paintFlank(vh > 0 ? y / vh : 0, vh);
+    }
+
+    /* ---- back to top: appears once the hero is behind you ---- */
+    if (toTop) {
+      var trigger = (heroTrack ? heroTrack.offsetHeight : vh) * 0.9;
+      var want = y > trigger ? 'true' : 'false';
+      if (toTop.dataset.show !== want) toTop.dataset.show = want;
+    }
+    /* ---- scroll-anchored reveals ---- */
+    if (!reduce) paintReveals(y, vh);
+
+    /* ---- statement: pin the section, then light word by word ----
+       Progress is measured across the track's overflow, not the viewport, so the
+       text holds dead still while the colour sweeps through it. */
+    if (litTrack && !reduce && litChars.length) {
+      /* Progress from the block's own position on screen, the same way every
+         other reveal on this page works. It starts filling when the block's top
+         crosses LIT_IN of the viewport height and is complete once its bottom
+         has risen to LIT_OUT — so the whole sweep happens across the block
+         travelling up the screen under a normal scroll, and reverses exactly
+         when you scroll back. Cached top and height: no layout read per frame. */
+      var p;
+      if (litTravel > 0){
+        /* Pinned: hold the block for the length of the track's overflow and
+           light it against that travel, the same mechanic the hero uses. */
+        var lp = y - litTrackTop;
+        lp = lp < 0 ? 0 : lp > litTravel ? litTravel : lp;
+        var lt = lp === 0 ? 'none' : 'translate3d(0,' + lp.toFixed(2) + 'px,0)';
+        if (litPin && litPin.style.transform !== lt) litPin.style.transform = lt;
+        p = lp / litTravel;
+      } else {
+        var elTop = litTop - y;
+        var span  = vh * (LIT_IN - LIT_OUT) + litH;
+        p = span > 0 ? (vh * LIT_IN - elTop) / span : 0;
+        p = p < 0 ? 0 : p > 1 ? 1 : p;
+      }
+      {
+        var n = litChars.length;
+        /* The leading edge, in letter-index space. It runs from 0 to
+           (n-1)+LIT_BAND so that at p=0 no letter has started and at p=1 the
+           last one has finished — the band is inside the travel, not clipped by
+           it. A letter begins mixing when the edge reaches it and is done
+           LIT_BAND letters later, so LIT_BAND is literally how many characters
+           wide the gradient is. */
+        var head = p * (n - 1 + LIT_BAND);
+        var a = Math.ceil(head - LIT_BAND), b = Math.floor(head);
+        if (a < 0) a = 0; if (b > n - 1) b = n - 1;
+        /* Only the letters mid-mix need writing: everything behind the band is
+           already 1 and everything ahead is already 0. Unioning with last
+           frame's band covers whatever the edge swept past since, however far
+           the scroll jumped. */
+        var lo = a < litA ? a : litA, hi = b > litB ? b : litB;
+        if (lo < 0) lo = 0; if (hi > n - 1) hi = n - 1;
+        for (var i = lo; i <= hi; i++){
+          var t = (head - i) / LIT_BAND;
+          t = t < 0 ? 0 : t > 1 ? 1 : t;
+          t = t * t * (3 - 2 * t);          /* smoothstep: ease both ends of the
+                                               letter's own fade, so the band has
+                                               no hard edge at either side */
+          var v = t.toFixed(3);
+          if (litLast[i] !== v){ litChars[i].style.setProperty('--p', v); litLast[i] = v; }
+        }
+        litA = a; litB = b;
+      }
+    }
+    if (!reduce) {
+      for (var j = 0; j < pars.length; j++){
+        var el = pars[j], b = el.getBoundingClientRect();
+        if (b.bottom > -200 && b.top < vh + 200){
+          var mid = (b.top + b.height/2 - vh/2) / vh;
+          el.style.transform = 'translate3d(0,' + (mid * -22).toFixed(2) + 'px,0)';
+        }
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  /* ---------- reveals: each section conducts its own cascade ---------- */
+  /* Measured off the reference clip: elements arrive ~280ms apart and
+     travel ~64px. The slow cascade is what reads as composed rather than
+     as a page loading. Masked lines still travel one line height (110%). */
+  var STEP = 280, LINE_STEP = 140;
+  var CHAR_STEP = 65;        /* gap between letters — the thing you actually see */
+  var CHAR_MAX  = 24;        /* above this many letters, reveal by line instead */
+  var esc = function(t){ return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+
+  /* Lay the words out as inline-blocks, read where the browser actually broke
+     them, and hand the lines back as strings. Has to run after the webfont
+     lands and again on resize, because the line breaks move. */
+  function readLines(el){
+    var txt = el.getAttribute('data-text');
+    /* An explicit <br> in the source is a forced break. It has to be read once,
+       before anything writes to innerHTML, because every path below wipes the
+       element — and textContent alone would drop the break and glue the two
+       lines together with no space. Cached in data-lines so resize and the
+       font-ready rerun reuse it rather than re-reading a stripped element. */
+    var forced = el.getAttribute('data-lines');
+    if (txt === null){
+      var parts = el.innerHTML.split(/<br\s*\/?>/i);
+      if (parts.length > 1){
+        forced = parts.map(function(p){
+          var d = document.createElement('div');
+          d.innerHTML = p;
+          return d.textContent.trim().replace(/\s+/g,' ');
+        }).filter(Boolean).join('\n');
+        el.setAttribute('data-lines', forced);
+      }
+      txt = forced ? forced.split('\n').join(' ')
+                   : el.textContent.trim().replace(/\s+/g,' ');
+      el.setAttribute('data-text', txt);
+    }
+    /* Forced lines skip the measure pass entirely: the breaks are known, so
+       there is nothing to read off offsetTop. */
+    if (forced) return { text: txt, lines: forced.split('\n') };
+    el.innerHTML = '';
+    var words = txt.split(' '), spans = [];
+    words.forEach(function(w,i){
+      var sp = document.createElement('span');
+      sp.style.display = 'inline-block';
+      sp.textContent = w;
+      el.appendChild(sp);
+      if (i < words.length - 1) el.appendChild(document.createTextNode(' '));
+      spans.push(sp);
+    });
+    var lines = [], top = null, cur = null;
+    spans.forEach(function(sp){
+      var t = sp.offsetTop;
+      if (t !== top){ top = t; cur = []; lines.push(cur); }
+      cur.push(sp.textContent);
+    });
+    return { text: txt, lines: lines.map(function(l){ return l.join(' '); }) };
+  }
+
+  function finishSplit(el, txt){
+    /* Splitting into spans would otherwise make screen readers announce the
+       text one fragment at a time. */
+    el.setAttribute('aria-label', txt);
+    el.classList.add('split');
+    if (typeof measureRev === 'function') measureRev();
+  }
+
+  /* Headings: each rendered line gets a mask, each letter inside it moves. */
+  function splitLines(el){
+    var r = readLines(el);
+    el.innerHTML = r.lines.map(function(line){
+      return '<span class="ln">' + line.split('').map(function(ch){
+        return ch === ' ' ? '<span class="ch sp"></span>'
+                          : '<span class="ch">' + esc(ch) + '</span>';
+      }).join('') + '</span>';
+    }).join('');
+    finishSplit(el, r.text);
+  }
+
+  /* Body copy: same masks, but the whole line is the moving unit. At body size
+     a per-letter cascade reads as noise rather than as motion, and 200-odd
+     transforms a frame buys nothing. The inner span still carries .ch, so the
+     paint code counts it as a unit and needs no special case.
+     The trailing space is a text node outside the moving span: it keeps the
+     lines from running together as "the" + "storefront" in the accessibility
+     tree, and CSS drops trailing white space at the end of a line, so it costs
+     nothing visually. */
+  function splitBlockLines(el){
+    var r = readLines(el);
+    el.innerHTML = r.lines.map(function(line){
+      return '<span class="ln"><span class="ch ln__in">' + esc(line) + '</span> </span>';
+    }).join('');
+    finishSplit(el, r.text);
+  }
+
+  var splitEls = [].slice.call(document.querySelectorAll('[data-split]'));
+  var lineEls  = [].slice.call(document.querySelectorAll('[data-split-lines]'));
+  /* force=false skips anything already revealed. A late font load would
+     otherwise rebuild the spans mid-cascade and wipe the delays, so the
+     heading would snap in with no animation at all. */
+  function splitAll(){
+    if (!reduce){
+      splitEls.forEach(splitLines);
+      lineEls.forEach(splitBlockLines);
+    }
+    /* the intro copy is .flankEl, not [data-el], so its units are cached by the
+       flank painter rather than measureRev */
+    measureFlankChars();
+  }
+  splitAll();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(function(){ splitAll(); });
+  var rsz;
+  addEventListener('resize', function(){ clearTimeout(rsz); rsz = setTimeout(function(){ splitAll(); measureRev(); }, 200); });
+
+  /* ==========================================================
+     SCROLL-ANCHORED REVEALS
+     Each element's progress comes from its own position in the viewport, so
+     the whole page is scrubbable: scroll up and it un-reveals, stop halfway
+     and it stays halfway. Nothing is on a timer.
+     Element positions are cached via offsetTop (transform-independent), so the
+     per-frame work is pure arithmetic with no layout reads.
+     ========================================================== */
+  var REV_START = 0.95, REV_END = 0.48;   /* element top, as a fraction of vh */
+  var REV_RISE  = 64;                     /* px an element travels */
+  /* Extra scroll, in viewport fractions, that an item in a trailing column
+     waits before it starts. Items side by side share a document top, so without
+     it a row arrives as one flat line; with it the row reads left to right like
+     everything else on the page. Applies to the work grid and the services row —
+     both reveal per item rather than as a block. The reveal window itself is REV_START minus
+     REV_END, 0.47vh, so this is a little under half of it — the trailing column
+     is well under way before the leading one lands, rather than waiting for it.
+     Past about 0.30 the two stop overlapping at all and the row reads as two
+     separate events. */
+  var REV_LAG   = 0.20;
+  var CHAR_BAND = 0.46;                   /* share of the window one letter takes */
+
+  function docTop(el){
+    var t = 0;
+    while (el){ t += el.offsetTop; el = el.offsetParent; }
+    return t;
+  }
+
+  var revEls = [].slice.call(document.querySelectorAll('[data-el]'));
+  var revData = [];
+  function measureRev(){
+    if (!revEls) return;          /* splitLines can fire before revEls is assigned */
+    revData = revEls.map(function(el){
+      /* Which column an item sits in is read from layout rather than written
+         into the markup, so it follows the grid: at one column every item is
+         flush left and the lag is zero on its own. */
+      var lag = 0, grid = el.parentElement;
+      if (grid && (grid.classList.contains('jobs') || grid.classList.contains('caps'))){
+        var gr = grid.getBoundingClientRect(), er = el.getBoundingClientRect();
+        var room = gr.width - er.width;
+        /* Scaled by how far across the row the item sits, not by a left/right
+           test, so a third column would land between the two rather than tying
+           with the last. At one column room is 0 and the lag zeroes itself. */
+        if (room > 40) lag = REV_LAG * ((er.left - gr.left) / room);
+      }
+      return { el: el, top: docTop(el), h: el.offsetHeight, lag: lag,
+               chars: [].slice.call(el.querySelectorAll('.ch')),
+               gate: !!(el.closest && el.closest('#work')),
+               last: -1 };
+    });
+  }
+  measureRev();
+  addEventListener('resize', measureRev);
+  window.addEventListener('load', measureRev);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(measureRev);
+  measureLit();
+  addEventListener('resize', measureLit);
+  window.addEventListener('load', measureLit);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(measureLit);
+
+  /* The scroll position at which the statement's last letter lights — the
+     same p=1 the lighting loop computes, solved for y. Anything in the work
+     section waits for it: its own reveal can't begin until the sentence above
+     has finished, and then ramps in over a quarter viewport rather than
+     popping to wherever its natural progress already was. */
+  var LIT_RAMP = 0.25;
+  function paintReveals(y, vh){
+    var start = vh * REV_START, end = vh * REV_END, span = start - end;
+    var litDoneY = (litTrack && !reduce && litChars.length) ? litDoneAt(vh) : -1;
+    for (var i = 0; i < revData.length; i++){
+      var d = revData[i], screenTop = d.top - y + d.lag * vh;
+      if (d.gate && litDoneY > 0 && y < litDoneY){ if (d.last !== 0){ applyRev(d, 0); d.last = 0; } continue; }
+      /* cheap cull: nowhere near the window */
+      if (screenTop > start + 80){ if (d.last !== 0){ applyRev(d, 0); d.last = 0; } continue; }
+      if (screenTop + d.h < -80){ if (d.last !== 1){ applyRev(d, 1); d.last = 1; } continue; }
+      var p = (start - screenTop) / span;
+      p = p < 0 ? 0 : p > 1 ? 1 : p;
+      if (d.gate && litDoneY > 0){
+        var g = (y - litDoneY) / (vh * LIT_RAMP);
+        g = g < 0 ? 0 : g > 1 ? 1 : g;
+        if (g < p) p = g;
+      }
+      if (Math.abs(p - d.last) < 0.002) continue;
+      applyRev(d, p);
+      d.last = p;
+    }
+  }
+
+  function applyRev(d, p){
+    var n = d.chars.length;
+    if (n){
+      d.el.style.opacity = 1;
+      for (var i = 0; i < n; i++){
+        var off = (1 - CHAR_BAND) * (n > 1 ? i / (n - 1) : 0);
+        var pi = (p - off) / CHAR_BAND;
+        pi = pi < 0 ? 0 : pi > 1 ? 1 : pi;
+        var e = 1 - Math.pow(1 - pi, 3);
+        d.chars[i].style.transform = 'translateY(' + ((1 - e) * 115).toFixed(2) + '%)';
+      }
+    } else {
+      var e2 = 1 - Math.pow(1 - p, 3);
+      d.el.style.transform = 'translate3d(0,' + ((1 - e2) * REV_RISE).toFixed(1) + 'px,0)';
+      d.el.style.opacity = e2.toFixed(3);
+    }
+  }
+
+  if (reduce) {
+    revData.forEach(function(d){ applyRev(d, 1); });
+  }
+
+  /* ---------- anchors ---------- */
+  document.querySelectorAll('a[href^="#"]').forEach(function(a){
+    a.addEventListener('click', function(e){
+      var id = a.getAttribute('href').slice(1);
+      var t  = id ? document.getElementById(id) : document.body;
+      if (!t) return;
+      e.preventDefault();
+      /* No fixed bar on this page any more, so a section only needs to clear
+         the viewport edge. */
+      var y = t.getBoundingClientRect().top + (smooth ? current : scrollY) - 20;
+      scrollTo({top:y, behavior: reduce ? 'auto' : 'smooth'});
+    });
+  });
+
+  /* ---------- landing on a hash ---------- */
+  /* A native fragment jump does nothing on this page once the lerp is running.
+     #view is position:fixed, so as far as the browser is concerned every
+     element's offset from the top of the viewport *is* its offset in the
+     document — it decides the target is already on screen and stays put. The
+     project pages link back to #work, so this is the path in, not an edge case.
+     Same measurement as the anchor clicks above, so both routes land a section
+     in the same place.
+     Not a slide from the top: 2600px through a page the visitor has just asked
+     to leave is a long way to travel to get back to where they already were.
+     Instead the position is set at once and the last stretch is given back —
+     see the run-up below. */
+  /* How much scroll to arrive with still to travel, in viewport fractions.
+     The reveal window is REV_START minus REV_END, 0.47vh, and a trailing
+     column waits REV_LAG (0.20vh) on top of that, so 0.72 is the whole cascade
+     with a little either side. Land flat at the section and the tiles are
+     simply already there; land this far short and the existing scroll-anchored
+     reveal plays itself as the page settles the rest of the way in. Nothing
+     new animates the tiles — they are scrubbed off scroll position exactly as
+     they are when you scroll here by hand, which is what makes the arrival
+     look the same as the journey. */
+  var HASH_RUNUP = 0.72;
+  /* Where the run-up is heading. Held outside the tween so the destination can
+     be moved after the tween has started — see correctHash. */
+  var hashTo = 0;
+
+  function hashTarget(t){
+    /* getBoundingClientRect is measured against the painted position, and with
+       the lerp on that is current, not the resting scroll — so current is what
+       goes back on to turn it into a document offset. */
+    var y = t.getBoundingClientRect().top + (smooth ? current : scrollY) - 20;
+    /* Clamped: while the lerp is on, the body's height is a stand-in for
+       #view's, and asking to scroll past the end of it lands short and leaves
+       current and scrollY disagreeing. */
+    return Math.max(0, Math.min(y, Math.max(0, document.body.scrollHeight - innerHeight)));
+  }
+
+  function jumpToHash(animate){
+    var id = location.hash.slice(1);
+    if (!id) return;
+    var t = document.getElementById(id);
+    if (!t) return;
+    var y = hashTo = hashTarget(t);
+    var run = (animate && !reduce) ? Math.min(y, innerHeight * HASH_RUNUP) : 0;
+    dirty = true;
+
+    if (smooth) {
+      /* The lerp is the run-up. scrollY goes straight to the destination, the
+         frame loop reads target from it, and current eases up on the page's own
+         scroll feel — no second easing curve, and paintReveals is fed from
+         current, so the cascade rides along.
+         The transform is written by hand because setting current alone leaves
+         the page painted at 0 until the next frame. */
+      scrollTo({ top:y, behavior:'auto' });
+      target  = y;
+      current = y - run;
+      view.style.transform = 'translate3d(0,' + (-current).toFixed(2) + 'px,0)';
+      return;
+    }
+
+    if (!run){ scrollTo({ top:y, behavior:'auto' }); return; }
+
+    /* No lerp to borrow, so the run-up is scrolled by hand. An own tween
+       rather than behavior:'smooth' because the destination still moves under
+       it while images decode, and the browser's smooth scroll cancels outright
+       the moment anything else touches the scroll position. */
+    var from = y - run, t0 = performance.now();
+    scrollTo({ top:from, behavior:'auto' });
+    requestAnimationFrame(function step(now){
+      var p = Math.min(1, (now - t0) / 900);
+      var e = 1 - Math.pow(1 - p, 3);
+      scrollTo({ top:from + (hashTo - from) * e, behavior:'auto' });
+      if (p < 1) requestAnimationFrame(step);
+    });
+  }
+
+  /* A correction, not a second landing. The section's document position is not
+     final when the jump is made: the stand-in body height is measured off
+     #view, which is still growing while the work tiles decode, and the webfont
+     swap moves everything under it. Measured at 1440 that is a drift of about
+     60px — enough to land the grid under the top edge instead of below it.
+     Moving the destination rather than the position is what keeps this
+     invisible: the lerp and the tween both read where they are going every
+     frame, so a run-up already in flight simply finishes somewhere else. */
+  function correctHash(){
+    var t = document.getElementById(location.hash.slice(1));
+    if (!t) return;
+    var y = hashTarget(t);
+    if (Math.abs(y - (smooth ? target : hashTo)) < 2) return;
+    hashTo = y;
+    if (smooth){ scrollTo({ top:y, behavior:'auto' }); target = y; }
+    else if (performance.now() > hashRunEnd) scrollTo({ top:y, behavior:'auto' });
+    dirty = true;
+  }
+
+  var hashRunEnd = 0;
+  if (location.hash) {
+    jumpToHash(true);
+    hashRunEnd = performance.now() + 900;
+    addEventListener('load', function(){ requestAnimationFrame(correctHash); });
+    /* The font swap lands on its own schedule, usually after load. */
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(correctHash);
+  }
+
+  /* ---------- back to top ---------- */
+  if (toTop) {
+    toTop.addEventListener('click', function(){
+      scrollTo({top:0, behavior: reduce ? 'auto' : 'smooth'});
+    });
+  }
+
+  /* ---------- service panels ---------- */
+  /* The expand is entirely CSS — flex-grow on :hover / :focus-within. All the
+     script does is fill in the four shots, whose sources are borrowed from the
+     work grid rather than embedded a second time. The order below is the panel
+     order — Web, Email, Product, Brand — pointing at the project that
+     demonstrates each: the Rengar redesign, the Gift Guide campaign, the
+     Tough Armor launch, the Monster After Dark identity. Re-order this array to
+     change which piece a panel shows. */
+  /* Which work tile fronts each capability column, by index into the work grid:
+     Rengar for Web, the Tough Armor launch for Product, Monster After Dark
+     for Branding. Three now, not four — Email folded into Web. */
+
+  /* The description has to break into its own masked lines so it can climb in
+     step with the list beside it. Where those breaks fall depends on the width
+     the card becomes, not the width it sits at, so each item is briefly forced
+     into its open state to be measured and then let go. Reading offsetTop
+     forces layout but never a paint, so none of it is visible.
+     Only above the stacking breakpoint: below it every panel is open already
+     and there is no cascade to line up. */
+  /* The work tiles never change width on hover — only the image inside scales —
+     so their labels can be measured where they sit, with none of the forced
+     open state the service panels need. */
+  function splitWorkLabels(){
+    [].slice.call(document.querySelectorAll('.job__label')).forEach(function(label){
+      var parts = [].slice.call(label.children), idx = 0;
+      parts.forEach(function(el){
+        if (reduce){
+          var t = el.getAttribute('data-text') || el.textContent;
+          el.textContent = t;
+          return;
+        }
+        var r = readLines(el);
+        el.innerHTML = r.lines.map(function(line){
+          return '<span class="job__ln" style="--d:' + (120 + idx++ * 80) + 'ms">'
+               + '<span>' + esc(line) + '</span> </span>';
+        }).join('');
+        el.setAttribute('aria-label', r.text);
+      });
+    });
+  }
+  splitWorkLabels();
+  addEventListener('load', splitWorkLabels);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(splitWorkLabels);
+  var wRsz;
+  addEventListener('resize', function(){ clearTimeout(wRsz); wRsz = setTimeout(splitWorkLabels, 220); });
+
+
+})();
+</script>
+
+</body>
+</html>

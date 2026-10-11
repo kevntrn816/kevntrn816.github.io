@@ -1,0 +1,69 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
+<style>
+:root{--mid:#F5F5F7;--dark:#FFFFFF;--gray:#6E6E73;--blue:#0071E3;--g:clamp(16px,4vh,40px);--font:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--mid);font:15px var(--font);color:#1D1D1F}
+.anatomy{box-sizing:border-box;height:100%;display:flex;flex-direction:column;justify-content:center;gap:2vh;padding:7vh 0 5vh}
+.anatomy header{padding:0 var(--g) 1vh}
+.sec-h{margin:0;font-size:clamp(18px,3.4vh,32px);line-height:1.2;letter-spacing:-.018em;font-weight:500}
+.sec-sub{margin:.8vh 0 0;color:var(--gray);font-size:clamp(12px,1.9vh,18px);line-height:1.45;font-weight:500}
+.fc-track{display:flex;gap:2vh;overflow-x:auto;scroll-snap-type:x mandatory;padding:4px var(--g) 8px;scroll-padding:0 var(--g);scrollbar-width:none}
+.fc-track::-webkit-scrollbar{display:none}
+.fc{flex:0 0 clamp(160px,30vh,338px);scroll-snap-align:start;display:flex;flex-direction:column;gap:1.6vh}
+.fc .media{aspect-ratio:4/5;border-radius:clamp(14px,2.4vh,24px);background:var(--dark);display:flex;align-items:center;justify-content:center;text-align:center;color:var(--gray);font-size:13px;line-height:1.4;box-shadow:0 0 0 1px rgba(0,0,0,.04)}
+.fc h3{margin:0;font-size:clamp(13px,2vh,18px);line-height:1.3;font-weight:500;letter-spacing:-.012em}
+.fc p{margin:.6vh 0 0;color:var(--gray);font-size:clamp(11px,1.6vh,14px);line-height:1.5;font-weight:500;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.fc small{display:block;margin-top:1.2vh;color:var(--blue);font-size:clamp(9px,1.3vh,12px);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.fc-nav{padding:4px var(--g) 0;display:flex;justify-content:flex-end}
+.fc-btns{display:flex;gap:8px}
+.fc-btn{width:clamp(28px,4.6vh,44px);height:clamp(28px,4.6vh,44px);border-radius:50%;border:1px solid #D2D2D7;background:transparent;display:grid;place-items:center;color:#1D1D1F;cursor:pointer;transition:opacity .2s}
+.fc-btn:disabled{opacity:.35;cursor:default}
+/* a very small box (the phone-width grid): cards only */
+@media (max-height:340px){
+  .anatomy{padding:5vh 0 4vh;gap:0}
+  .anatomy header,.fc-nav,.fc p{display:none}
+  .fc{flex-basis:46vh}
+  .fc .media{font-size:clamp(9px,3.4vh,13px)}
+  .fc h3{font-size:clamp(11px,4vh,16px)}
+  .fc small{font-size:clamp(8px,2.8vh,11px);margin-top:.6vh}
+}
+</style></head><body>
+<section class="anatomy" id="anatomy">
+  <header><h2 class="sec-h">Five features protect the Duo.</h2><p class="sec-sub">Swipe through what each part of the case does.</p></header>
+  <div class="fc-track" id="fcTrack" role="region" aria-roledescription="carousel" aria-label="Case features"></div>
+  <div class="fc-nav"><div class="fc-btns">
+    <button class="fc-btn" id="fcPrev" aria-label="Previous feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+    <button class="fc-btn" id="fcNext" aria-label="Next feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+  </div></div>
+</section>
+<script>
+(function(){
+  var feats=[
+    ["Hinge protection","A cover that moves with the fold and springs back into place. A spring cartridge inside the hinge pin keeps it snug against the phone whether the Duo is open, closed or anywhere in between, so the most exposed part of a foldable never goes bare.","Since 2019"],
+    ["Air Cushion corners","Hollow pockets in every corner compress first when the Duo hits the ground, spreading the impact into the case walls instead of the phone. Each half gets its own protected corners, so it’s covered whether it lands open or closed.","Since 2013"],
+    ["Seculink","A link structure that joins the two halves of the case along the spine. It moves with the hinge as the Duo folds and sits flush when it’s flat, closing the gap that can open up where a case’s two halves meet.","New for Duo, patent pending"],
+    ["Thickness","Protection that doesn’t fight the fold. The case adds as little as possible to each half, so the Duo still closes flat, slides into a pocket and feels like the phone you chose, not a brick wrapped around it.","Engineered for a slim fold"],
+    ["MagFit","Magnets built into the case line up with MagSafe, so chargers, wallets and mounts snap on and stay put, right through the case. No removing it to charge, no lining things up by feel.","Built for MagSafe"]];
+  var reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var fcTrack=document.getElementById('fcTrack'),fcPrev=document.getElementById('fcPrev'),fcNext=document.getElementById('fcNext');
+  /* the five cards twice over: the loop scrolls through the first set and, the
+     moment it lands on the second set's first card, jumps back to the real first
+     card without animation. The two frames are identical, so the loop reads as
+     continuous. */
+  var list=feats.concat(feats), n=feats.length;
+  fcTrack.innerHTML=list.map(function(f,i){return '<article class="fc" role="group" aria-roledescription="slide" aria-label="'+((i%n)+1)+' of '+n+': '+f[0]+'"><div class="media">Duo in case<br>Highlighted: '+f[0]+'</div><div><h3>'+f[0]+'</h3><p>'+f[1]+'</p><small>'+f[2]+'</small></div></article>'}).join('');
+  var cur=0;
+  function slideW(){var a=fcTrack.children[0],b=fcTrack.children[1];return b.offsetLeft-a.offsetLeft}
+  function goTo(i,smooth){cur=i;fcTrack.scrollTo({left:slideW()*i,behavior:smooth&&!reduce?'smooth':'auto'})}
+  fcPrev.onclick=function(){hold();goTo(cur>0?cur-1:n-1,true)};fcNext.onclick=function(){hold();step()};
+  function step(){if(cur>=n){goTo(0,false)}goTo(cur+1,true)}
+  var timer=null,DWELL=2800;
+  function start(){if(reduce||timer)return;timer=setInterval(function(){
+    if(cur>=n){goTo(0,false);setTimeout(function(){goTo(1,true)},40)}else goTo(cur+1,true)},DWELL)}
+  function hold(){clearInterval(timer);timer=null;setTimeout(start,DWELL*2)}
+  fcTrack.addEventListener('pointerdown',hold);
+  window.addEventListener('resize',function(){goTo(cur,false)});
+  goTo(0,false);start();
+})();
+</script></body></html>

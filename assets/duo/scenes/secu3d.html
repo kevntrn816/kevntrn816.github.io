@@ -1,0 +1,173 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>
+html,body{margin:0;height:100%;overflow:hidden;background:#F5F5F7}
+.duo3d,.drop3d,.secu3d{position:absolute;inset:0;width:100%;height:100%;border-radius:0}
+.duo3d{width:100%;position:relative}
+.duo3d canvas{display:block;width:100%;height:100%}
+.duo3d,.secu3d{background:none}
+.drop3d{position:relative;width:100%;border-radius:24px;overflow:hidden;background:radial-gradient(120% 90% at 50% 30%,#FFFFFF 0%,#EDEDF0 75%)}
+.drop3d canvas{position:absolute;inset:0;display:block;width:100%;height:100%}
+.drop3d{background:radial-gradient(120% 90% at 50% 30%,#FFFFFF 0%,#EDEDF0 75%)}
+.secu3d{width:100%;position:relative}
+.secu3d canvas{display:block;width:100%;height:100%}
+.duo3d,.secu3d{background:none}
+.macro{position:absolute;inset:0;z-index:1;opacity:0;pointer-events:none;overflow:hidden;background:#E9E9E9}
+.macro-in{position:absolute;inset:0;transform-origin:56% 45%;will-change:transform}
+.macro-in img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.macro .pocket{position:absolute;left:47.3%;top:33.2%;width:17.4%;height:23.2%;border-radius:22%;border:2px solid rgba(40,151,255,.95);background:rgba(40,151,255,.16);box-shadow:0 0 18px rgba(40,151,255,.55);transform-origin:0% 50%}
+.macro .pocket::before,.macro .pocket::after{content:"";position:absolute;inset:-2px;border-radius:inherit;border:2px solid rgba(40,151,255,.8);opacity:0}
+.macro .floor{position:absolute;left:0;right:0;bottom:0;height:24%;background:linear-gradient(180deg,rgba(20,20,22,.0) 0,rgba(20,20,22,.85) 18%,#EDEDF0 60%);}
+.macro .floor::before{content:"";position:absolute;left:-10%;right:-10%;top:12%;height:30px;background:radial-gradient(50% 50% at 50% 50%,rgba(0,0,0,.55),transparent);}
+.macro.hit .pocket{animation:mSquash 3.6s cubic-bezier(.25,.7,.3,1) both}
+.macro.hit .pocket::before{animation:mWave 3.4s ease-out .2s both}
+.macro.hit .pocket::after{animation:mWave 3.4s ease-out 1s both}
+.macro .ripple,.macro .glow,.macro .disp{position:absolute;pointer-events:none;opacity:0}
+.macro .ripple{left:var(--cx);top:var(--cy);width:16%;height:4%;margin:-2% 0 0 -8%;border-radius:50%;border:2px solid rgba(40,151,255,.85)}
+.macro .glow{left:var(--cx);top:var(--cy);width:30%;height:30%;margin:-15% 0 0 -15%;border-radius:50%;background:radial-gradient(closest-side,rgba(40,151,255,.75),rgba(40,151,255,0))}
+.macro .disp{left:var(--cx);top:var(--cy);width:80%;height:7px;margin-top:-3.5px;transform-origin:0 50%;border-radius:7px;background:linear-gradient(90deg,#9FD0FF,rgba(40,151,255,.85) 45%,rgba(40,151,255,0));box-shadow:0 0 12px rgba(40,151,255,.7)}
+.macro.hit .ripple{animation:sRipple 3.8s cubic-bezier(.15,.6,.3,1) both}
+.macro.hit .glow{animation:sGlow 3.4s ease-out both}
+.macro.hit .d1{animation:sDisp 3.6s cubic-bezier(.2,.6,.3,1) .15s both;--a:-24deg}
+.macro.hit .d2{animation:sDisp 4s cubic-bezier(.2,.6,.3,1) .5s both;--a:-38deg;height:5px}
+.macro.hit .d3{animation:sDisp 4.3s cubic-bezier(.2,.6,.3,1) .85s both;--a:-12deg;height:5px}
+@keyframes mSquash{0%{transform:scale(1,1);background:rgba(40,151,255,.16)}16%{transform:scale(.66,1.1);background:rgba(40,151,255,.5);box-shadow:0 0 34px rgba(40,151,255,.9)}40%{transform:scale(1.06,.96);background:rgba(40,151,255,.28)}64%{transform:scale(.98,1.01)}100%{transform:scale(1,1);background:rgba(40,151,255,.16)}}
+@keyframes mWave{0%{opacity:.9;transform:scale(1)}100%{opacity:0;transform:scale(2.4)}}
+@keyframes sRipple{0%{opacity:.95;transform:scale(.3)}100%{opacity:0;transform:scale(5)}}
+@keyframes sGlow{0%{opacity:0;transform:scale(.4)}18%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(2.2)}}
+@keyframes sDisp{0%{opacity:0;transform:rotate(var(--a)) scaleX(0)}14%{opacity:1}100%{opacity:0;transform:rotate(var(--a)) scaleX(1)}}
+</style></head><body><div class="secu3d" id="secu3d"></div>
+<script src="../../three.min.js"></script><script>window.__threeReady=true;</script>
+<script>window.__main=function(){window.__main=null;
+var reduce=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  (function(){
+    var host=document.getElementById('secu3d');if(!host||!window.THREE)return;
+    var renderer;try{renderer=new THREE.WebGLRenderer({antialias:true,alpha:true})}catch(e){return}
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));renderer.outputEncoding=THREE.sRGBEncoding;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.1;
+    host.appendChild(renderer.domElement);
+    var scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(38,1,1,4000);
+    scene.add(new THREE.HemisphereLight(0xffffff,0x2a2a30,1));
+    var key=new THREE.DirectionalLight(0xffffff,1.2);key.position.set(120,220,260);scene.add(key);
+    var rim=new THREE.DirectionalLight(0xbfd6ff,.8);rim.position.set(-200,80,-200);scene.add(rim);
+    var fill=new THREE.DirectionalLight(0xffffff,.4);fill.position.set(0,-200,160);scene.add(fill);
+  // ---------- dimensions (mm, approximate) ----------
+    var W=104, H=148, T=4.6, R=13, GAP=T/2+0.6; // proportions from the open-flat reference: each half about 0.70 wide to tall // half width, height, half thickness, corner radius
+
+    function rrShape(w,h,r){var s=new THREE.Shape(),x=-w/2,y=-h/2;
+      s.moveTo(x+r,y);s.lineTo(x+w-r,y);s.quadraticCurveTo(x+w,y,x+w,y+r);s.lineTo(x+w,y+h-r);s.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+      s.lineTo(x+r,y+h);s.quadraticCurveTo(x,y+h,x,y+h-r);s.lineTo(x,y+r);s.quadraticCurveTo(x,y,x+r,y);return s}
+    function slab(w,h,r,d,bev){var g=new THREE.ExtrudeGeometry(rrShape(w,h,r),{depth:d,bevelEnabled:true,bevelThickness:bev,bevelSize:bev,bevelSegments:4,curveSegments:16});g.center();return g}
+
+    // ---------- textures drawn on canvas ----------
+    function landscape(c,w,h,hole){var x=c.getContext('2d');
+      // night desert to match the reference: navy sky with stars, mauve horizon, dark ridgeline, soft dunes
+      var sky=x.createLinearGradient(0,0,0,h*.62);sky.addColorStop(0,'#161D2E');sky.addColorStop(.45,'#2A2B42');sky.addColorStop(.78,'#5A4358');sky.addColorStop(1,'#7C5A68');x.fillStyle=sky;x.fillRect(0,0,w,h);
+      var rnd=function(n){var v=Math.sin(n*12.9898)*43758.5453;return v-Math.floor(v)};
+      for(var i=0;i<140;i++){var sx=rnd(i)*w,sy=rnd(i+.5)*h*.42,r=rnd(i+.25)*1.4+.3;x.fillStyle='rgba(255,255,255,'+(.25+rnd(i+.75)*.6)+')';x.beginPath();x.arc(sx,sy,r,0,6.3);x.fill()}
+      function ridge(base,amp,top,bot,seed,jag){var g=x.createLinearGradient(0,base-amp*1.6,0,base+h*.2);g.addColorStop(0,top);g.addColorStop(1,bot);x.fillStyle=g;x.beginPath();x.moveTo(0,h);
+        for(var i=0;i<=w;i+=w/90){var y=base+Math.sin(i/w*5+seed)*amp*.6+Math.sin(i/w*13+seed*2)*amp*.3+Math.sin(i/w*37+seed*3)*amp*jag;x.lineTo(i,y)}x.lineTo(w,h);x.closePath();x.fill()}
+      ridge(h*.56,h*.05,'#3E3946','#24232B',1.3,.18);
+      ridge(h*.6,h*.04,'#34313B','#1B1B21',2.7,.22);
+      var d1=x.createLinearGradient(0,h*.6,0,h);d1.addColorStop(0,'#6D6168');d1.addColorStop(.5,'#4C4248');d1.addColorStop(1,'#2C262B');x.fillStyle=d1;
+      x.beginPath();x.moveTo(0,h);x.lineTo(0,h*.7);x.quadraticCurveTo(w*.3,h*.6,w*.55,h*.66);x.quadraticCurveTo(w*.8,h*.72,w,h*.63);x.lineTo(w,h);x.closePath();x.fill();
+      var d2=x.createLinearGradient(0,h*.72,0,h);d2.addColorStop(0,'#5A4F57');d2.addColorStop(1,'#231F24');x.fillStyle=d2;
+      x.beginPath();x.moveTo(0,h);x.lineTo(0,h*.84);x.quadraticCurveTo(w*.45,h*.7,w,h*.8);x.lineTo(w,h);x.closePath();x.fill();
+      x.strokeStyle='rgba(255,255,255,.035)';x.lineWidth=1;for(var k=0;k<60;k++){var yy=h*.74+k*h*.0045;x.beginPath();x.moveTo(0,yy+Math.sin(k)*4);x.quadraticCurveTo(w*.5,yy-h*.03,w,yy+Math.cos(k)*4);x.stroke()}
+      if(hole){x.fillStyle='#050608';x.beginPath();x.arc(w*.86,h*.06,w*.035,0,Math.PI*2);x.fill()}
+      var t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;t.anisotropy=4;return t}
+    function canvas(w,h){var c=document.createElement('canvas');c.width=w;c.height=h;return c}
+    var innerTex=landscape(canvas(1024,1100),1024,1100,false);
+    var coverTex=landscape(canvas(512,1100),512,1100,true);
+    function spineTex(){var c=canvas(64,1024),x=c.getContext('2d');x.fillStyle='#2B3545';x.fillRect(0,0,64,1024);
+      x.save();x.translate(32,512);x.rotate(Math.PI/2);x.fillStyle='rgba(190,200,215,.75)';x.font='600 34px DM Sans, sans-serif';x.textAlign='center';x.textBaseline='middle';x.fillText('spigen',0,0);x.restore();
+      var t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;return t}
+
+    // ---------- materials ----------
+    var mBody=new THREE.MeshStandardMaterial({color:0x05080C,roughness:.45,metalness:.05});
+    var mFrame=new THREE.MeshStandardMaterial({color:0x0E141D,roughness:.25,metalness:.8});
+    var mScreenBlack=new THREE.MeshStandardMaterial({color:0x07080B,roughness:.15,metalness:.2});
+    var mCase=new THREE.MeshPhysicalMaterial({color:0xffffff,roughness:.06,metalness:0,clearcoat:1,clearcoatRoughness:.05,transparent:true,opacity:.12,depthWrite:false,side:THREE.DoubleSide});
+    var mRing=new THREE.MeshStandardMaterial({color:0xF7F7F7,roughness:.5});
+    var mGlass=new THREE.MeshStandardMaterial({color:0x0B0D14,roughness:.05,metalness:.6});
+    var mLensRing=new THREE.MeshStandardMaterial({color:0xC9C4BA,roughness:.2,metalness:.9});
+    function screenMat(tex,offX,repX){var t=tex.clone();t.needsUpdate=true;t.offset.set(offX,0);t.repeat.set(repX,1);return new THREE.MeshStandardMaterial({map:t,roughness:.18,metalness:0,emissive:0xffffff,emissiveMap:t,emissiveIntensity:.35})}
+
+    // ---------- one half ----------
+    function half(side,cams){ // side -1 left, +1 right; cams = this half carries the cameras on its outside, the other carries the cover screen
+      var g=new THREE.Group();
+      var body=new THREE.Mesh(slab(W,H,R,T-1.2,.6),mBody);g.add(body);
+      var frame=new THREE.Mesh(slab(W+.3,H+.3,R,T-2.4,.25),mFrame);g.add(frame);
+      // inner screen (faces +z when flat)
+      var bez=new THREE.Mesh(new THREE.ShapeGeometry(rrShape(W-1.4,H-1.4,R-1),16),mScreenBlack);bez.position.z=T/2+.02;g.add(bez);
+      var scr=new THREE.Mesh(new THREE.ShapeGeometry(rrShape(W-4,H-4,R-2.5),16),screenMat(innerTex,side<0?0:.5,.5));
+      fixUV(scr.geometry,W-4,H-4);scr.position.z=T/2+.05;g.add(scr);
+      // outside face (-z)
+      var k=-side; // mirrors outside details so the camera plateau sits at the outer edge
+      if(!cams){
+        var cb=new THREE.Mesh(new THREE.ShapeGeometry(rrShape(W-1.4,H-1.4,R-1),16),mScreenBlack);cb.rotation.y=Math.PI;cb.position.z=-T/2-.06;g.add(cb);
+        var cs=new THREE.Mesh(new THREE.ShapeGeometry(rrShape(W-4,H-4,R-2.5),16),screenMat(coverTex,0,1));fixUV(cs.geometry,W-4,H-4);cs.rotation.y=Math.PI;cs.position.z=-T/2-.12;g.add(cs);
+      }else{
+        var back=new THREE.Group();back.rotation.y=Math.PI;back.position.z=-T/2;g.add(back);
+        // camera plateau: pill near the outer top corner (outer edge is -x in back space after flip → +x)
+        var bump=new THREE.Mesh(slab(72,30,15,1.8,.7),mBody);bump.position.set(k*(W/2-44),H/2-22,1.2);back.add(bump);
+        var bumpC=new THREE.Mesh(slab(75,33,16.5,1.8,.4),mCase);bumpC.position.copy(bump.position);bumpC.position.z+=.2;back.add(bumpC);
+        [[k*(W/2-20),H/2-22],[k*(W/2-43),H/2-22]].forEach(function(p){
+          var ring=new THREE.Mesh(new THREE.CylinderGeometry(10,10,1.6,48),mLensRing);ring.rotation.x=Math.PI/2;ring.position.set(p[0],p[1],2.6);back.add(ring);
+          var lens=new THREE.Mesh(new THREE.CylinderGeometry(7.8,7.8,1.8,48),mGlass);lens.rotation.x=Math.PI/2;lens.position.set(p[0],p[1],2.8);back.add(lens);
+        });
+        var flash=new THREE.Mesh(new THREE.CircleGeometry(1.6,24),new THREE.MeshStandardMaterial({color:0xFFF4D6,emissive:0x887a55,roughness:.3}));flash.position.set(k*(W/2-66),H/2-26,2.1);back.add(flash);
+        // MagFit ring + alignment tab
+        var mag=new THREE.Mesh(new THREE.RingGeometry(22,29,64),mRing);mag.position.set(k*2,-6,.08);back.add(mag);
+        var tab=new THREE.Mesh(new THREE.ShapeGeometry(rrShape(5,13,2.5),8),mRing);tab.position.set(k*2,-46,.08);back.add(tab);
+      }
+      // clear case shell around this half
+      var shell=new THREE.Mesh(slab(W+2.6,H+2.6,R+1.3,T+.4,.8),mCase);shell.renderOrder=2;g.add(shell);
+      g.children.forEach(function(m){m.position.x+=side*W/2});
+      return g;
+    }
+    function fixUV(geo,w,h){var p=geo.attributes.position,uv=geo.attributes.uv;for(var i=0;i<p.count;i++){uv.setXY(i,(p.getX(i)+w/2)/w,(p.getY(i)+h/2)/h)}uv.needsUpdate=true}
+
+    var device=new THREE.Group();scene.add(device);var inner=new THREE.Group();device.add(inner);
+    var pivotL=new THREE.Group(),pivotR=new THREE.Group();
+    pivotL.position.x=-GAP;pivotR.position.x=GAP;
+    pivotL.add(half(-1,false));pivotR.add(half(1,true));
+    inner.add(pivotL,pivotR);
+    // hinge: metal barrel + clear hinge cover along the spine
+    var barrel=new THREE.Mesh(new THREE.CylinderGeometry(T*.55,T*.55,H-8,32),mFrame);barrel.position.z=-T*.15;inner.add(barrel);
+    var cover=new THREE.Mesh(slab(GAP*2+3.2,H+3,1.6,T+1.6,.8),mCase);cover.position.z=-.6;cover.renderOrder=3;inner.add(cover);
+    var spine=new THREE.Mesh(new THREE.PlaneGeometry(GAP*2-.4,H-6),new THREE.MeshStandardMaterial({map:spineTex(),roughness:.5}));spine.rotation.y=Math.PI;spine.position.z=-T/2-1.3;inner.add(spine);
+
+    // ---------- fold ----------
+    // f: 0 = flat open, 1 = closed (inner screens face each other). Halves turn about the hinge.
+    function setFold(f){
+      var a=f*Math.PI/2;pivotL.rotation.y=a;pivotR.rotation.y=-a;
+      // keep the folded stack visually centered as it closes
+      inner.position.z=-(W/2)*Math.sin(a);
+    }
+
+
+    // Seculink: a metal bar that bridges the two case halves just below the hinge, at the near end
+    var mLink=new THREE.MeshStandardMaterial({color:0xB9BCC2,roughness:.45,metalness:.85});
+    var linkShape=rrShape(18,7.5,3.6);
+    var linkGeo=new THREE.ExtrudeGeometry(linkShape,{depth:3,bevelEnabled:true,bevelThickness:.5,bevelSize:.5,bevelSegments:3,curveSegments:16});linkGeo.center();
+    var link=new THREE.Mesh(linkGeo,mLink),link2=new THREE.Mesh(linkGeo,mLink);
+    var linkHolder=new THREE.Group(),linkHolder2=new THREE.Group();inner.add(linkHolder,linkHolder2);linkHolder.add(link);linkHolder2.add(link2);link2.rotation.x=Math.PI/2;
+    // link sits in the x–z plane (seen end-on), at the top end of the phone
+    link.rotation.x=Math.PI/2;
+    var pivots=[];[-1,1].forEach(function(sd){var c=new THREE.Mesh(new THREE.CylinderGeometry(3.4,3.4,4,24),new THREE.MeshStandardMaterial({color:0x6E7076,roughness:.4,metalness:.8}));inner.add(c);pivots.push([c,sd])});
+    function placeLink(f){var a=f*Math.PI/2,z=13,gap=GAP+z*Math.sin(Math.PI/2-a)*0+z*Math.tan(Math.PI/2-a);
+      // distance between the halves' inner faces at depth z below the hinge
+      var half=(GAP+(z)*Math.cos(a)/Math.max(.15,Math.sin(a)));var span=Math.max(10,Math.min(26,2*half-2));
+      link.scale.set(span/18,1,1);link2.scale.set(span/18,1,1);linkHolder.position.set(0,H/2-4,z);linkHolder2.position.set(0,-H/2+4,z);
+      pivots.forEach(function(p){p[0].position.set(p[1]*(span/2-1),-H/2+4,z);p[0].rotation.set(0,0,0)})}
+    // A-frame pose: hinge up, looking down the length of the phone from the top end
+    device.rotation.set(-(Math.PI/2-.06),0,0);
+    var turn=new THREE.Group();scene.add(turn);turn.add(device);turn.rotation.z=Math.PI;   // hinge on top, halves splayed down like an A
+    function resize(){var w=host.clientWidth,h=host.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()}
+    window.addEventListener('resize',resize);resize();
+    camera.fov=30;camera.position.set(0,-20,300);camera.lookAt(0,10,0);camera.updateProjectionMatrix();
+    var t0=performance.now(),visible=true,raf=0,PER=6500;
+    function draw(now){var p=((now-t0)%PER)/PER,f=.77+.06*Math.sin(p*Math.PI*2);setFold(f);placeLink(f);renderer.render(scene,camera);if(visible&&!reduce)raf=requestAnimationFrame(draw)}
+    if(reduce){setFold(.77);placeLink(.77);renderer.render(scene,camera)}
+    else if('IntersectionObserver' in window){new IntersectionObserver(function(e){visible=e[0].isIntersecting;cancelAnimationFrame(raf);if(visible)raf=requestAnimationFrame(draw)},{threshold:0}).observe(host)}
+    else raf=requestAnimationFrame(draw);
+  })();
+};if(window.__threeReady)window.__main();</script></body></html>

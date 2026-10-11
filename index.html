@@ -645,6 +645,8 @@ html[data-theme="dark"] .theme .moon{opacity:0;transform:rotate(70deg) scale(.5)
    everything else) rather than being capped at 42svh. */
 @media (max-width:767.98px) and (pointer:coarse){
   .hero__cardWrap{width:100%;max-width:none}
+  /* room between the portrait and the corner marks beneath it */
+  .hero__corners{padding-top:clamp(2rem,8vw,3rem)}
 }
 /* The headline is sized off viewport width, so from ~900px up it starts taking
    the vertical budget the portrait wants: at 1149x700 the two lines alone are

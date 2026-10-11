@@ -641,11 +641,10 @@ html[data-theme="dark"] .theme .moon{opacity:0;transform:rotate(70deg) scale(.5)
 @media (max-width:767.98px),(prefers-reduced-motion:reduce){
   .hero__cardWrap{width:min(100%,42svh)}
 }
-/* On phones the portrait runs the full width of the screen, edge to edge,
-   rather than sitting as a card inside the gutters. */
+/* On phones the portrait fills the content width (inside the same gutters as
+   everything else) rather than being capped at 42svh. */
 @media (max-width:767.98px) and (pointer:coarse){
-  .hero__cardWrap{width:calc(100% + var(--gut) * 2);max-width:none;margin-inline:calc(var(--gut) * -1)}
-  .hero__card{border-radius:0}
+  .hero__cardWrap{width:100%;max-width:none}
 }
 /* The headline is sized off viewport width, so from ~900px up it starts taking
    the vertical budget the portrait wants: at 1149x700 the two lines alone are

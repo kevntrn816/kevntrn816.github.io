@@ -244,6 +244,9 @@
   try { t = localStorage.getItem('kt-theme'); } catch(e){}
   document.documentElement.dataset.theme = (t === 'dark' || t === 'light') ? t : 'light';
   document.documentElement.classList.add('js');
+  /* Opt out of scroll restoration before the browser applies it: Firefox
+     restores the old position earlier than the foot script can undo it. */
+  try { if ('scrollRestoration' in history) history.scrollRestoration = 'manual'; } catch(e){}
 })();
 </script>
 
@@ -3000,7 +3003,13 @@ html.fbv-on::before{opacity:1}
      hero sequence is the point, so a refresh starts from the top. */
   if ('scrollRestoration' in history) {
     history.scrollRestoration = 'manual';
-    if (!location.hash) scrollTo(0, 0);
+    if (!location.hash) {
+      scrollTo(0, 0);
+      /* Firefox restores the old position before any script runs, so the
+         smooth-scroll target was seeded from it and would glide the page back
+         down. Reset the lerp to the top as well as the window. */
+      if (smooth) { target = 0; current = 0; if (view) view.style.transform = 'translate3d(0,0,0)'; }
+    }
     addEventListener('load', function(){ requestAnimationFrame(correctHash); });
     /* The font swap lands on its own schedule, usually after load. */
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(correctHash);

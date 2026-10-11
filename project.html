@@ -1677,10 +1677,12 @@ html.js .ph--scene{background:#F5F5F7}.ph--scene::after{content:none}.ph--scene 
   if (chosen !== 'dark' && chosen !== 'light') chosen = null;
   function metaFor(t){ var m = document.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute('content', t === 'dark' ? '#0e0f11' : '#ffffff'); }
   function current(){ return root.getAttribute('data-theme') === 'dark' ? 'dark' : 'light'; }
-  if (chosen) { root.setAttribute('data-theme', chosen); metaFor(chosen); }
-  else if (matchMedia('(prefers-color-scheme: dark)').matches && !root.hasAttribute('data-theme-set')) { root.setAttribute('data-theme', 'dark'); metaFor('dark'); }
-  /* a choice made here wins over anything the viewer writes later */
-  new MutationObserver(function(){ if (chosen && current() !== chosen) { root.setAttribute('data-theme', chosen); } metaFor(current()); })
+  /* Same rule as the index: light unless a choice has been stored. The OS
+     setting is not consulted, so the two pages can never disagree. */
+  function want(){ return chosen || 'light'; }
+  root.setAttribute('data-theme', want()); metaFor(want());
+  /* and that rule wins over anything written onto the attribute from outside */
+  new MutationObserver(function(){ if (current() !== want()) { root.setAttribute('data-theme', want()); } metaFor(current()); })
     .observe(root, { attributes: true, attributeFilter: ['data-theme'] });
   window.__ktChoose = function(t){ chosen = t; root.setAttribute('data-theme', t); metaFor(t); try { localStorage.setItem('kt-theme', t); } catch(e){} };
 })();

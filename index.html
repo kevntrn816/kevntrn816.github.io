@@ -2989,6 +2989,18 @@ html.fbv-on::before{opacity:1}
   if (location.hash) {
     jumpToHash(true);
     hashRunEnd = performance.now() + 900;
+    /* The hash has done its job once the run-up has landed. Dropped from the
+       address bar after that (no navigation, no history entry), so a refresh,
+       a bookmark or a shared link starts at the top rather than at the grid. */
+    setTimeout(function(){
+      try { history.replaceState(null, '', location.pathname + location.search); } catch(e){}
+    }, 1600);
+  }
+  /* Browsers also put a reloaded page back where it was. On this page the
+     hero sequence is the point, so a refresh starts from the top. */
+  if ('scrollRestoration' in history) {
+    history.scrollRestoration = 'manual';
+    if (!location.hash) scrollTo(0, 0);
     addEventListener('load', function(){ requestAnimationFrame(correctHash); });
     /* The font swap lands on its own schedule, usually after load. */
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(correctHash);

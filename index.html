@@ -1633,6 +1633,7 @@ html.fbv-on::before{opacity:1}
 @media (prefers-reduced-motion:no-preference){
   .lit{height:calc(100svh + var(--litTravel,110vh));padding-block:0}
   .lit__pin{height:100svh;display:flex;align-items:center;will-change:transform}
+  html:not(.smooth) .lit__pin{position:sticky;top:0;will-change:auto}
 }
 </style>
 </head>
@@ -1688,7 +1689,7 @@ html.fbv-on::before{opacity:1}
 
       <div class="flankCopy">
         <h2 class="flankEl" data-split>Hey, I'm Kevin.</h2>
-        <p class="flankEl" data-split-lines>I lead design and web at Spigen — the storefront, the email program, whatever we're building next. I came from the design side and taught myself the build side because I'd rather make the thing than describe it.</p>
+        <p class="flankEl" data-split-lines>I start with the problem, not the pixels, and I like figuring it out with the people who live with it. Ask questions, try things, keep what works. Good design comes out of good conversations.</p>
         <div class="btns flankEl">
           <a class="btn btn--fill" href="#contact">Work with me<span class="btn__arrow" aria-hidden="true"><svg width="17" height="10" viewBox="0 0 17 10" fill="none"><path d="M0 5h15M12 1l3.5 4-3.5 4" stroke="currentColor" stroke-width="1.6"/></svg></span></a>
           <a class="btn btn--ghost" href="#work">See the work<span class="btn__arrow" aria-hidden="true"><svg width="17" height="10" viewBox="0 0 17 10" fill="none"><path d="M0 5h15M12 1l3.5 4-3.5 4" stroke="currentColor" stroke-width="1.6"/></svg></span></a>
@@ -1962,7 +1963,7 @@ html.fbv-on::before{opacity:1}
       <p>©2026 Kevin Tran</p>
       <ul>
         <li><a href="https://www.linkedin.com/in/kvntrn/" target="_blank" rel="noopener">LinkedIn</a></li>
-        <li><a href="#">Résumé</a></li>
+        <li><a href="assets/Kevin-Tran-Resume.pdf" target="_blank" rel="noopener">Résumé</a></li>
       </ul>
     </div>
   </div>
@@ -2597,8 +2598,14 @@ html.fbv-on::before{opacity:1}
            light it against that travel, the same mechanic the hero uses. */
         var lp = y - litTrackTop;
         lp = lp < 0 ? 0 : lp > litTravel ? litTravel : lp;
-        var lt = lp === 0 ? 'none' : 'translate3d(0,' + lp.toFixed(2) + 'px,0)';
-        if (litPin && litPin.style.transform !== lt) litPin.style.transform = lt;
+        /* Under the smooth-scroll layer the pin is held by this translate. On a
+           touch device the page scrolls natively and a translate written from a
+           scroll event lands a frame late, which reads as the block juddering,
+           so there the pin is position:sticky (see the CSS) and nothing is written. */
+        if (smooth){
+          var lt = lp === 0 ? 'none' : 'translate3d(0,' + lp.toFixed(2) + 'px,0)';
+          if (litPin && litPin.style.transform !== lt) litPin.style.transform = lt;
+        } else if (litPin && litPin.style.transform) litPin.style.transform = '';
         p = lp / litTravel;
       } else {
         var elTop = litTop - y;
@@ -2629,7 +2636,7 @@ html.fbv-on::before{opacity:1}
           t = t * t * (3 - 2 * t);          /* smoothstep: ease both ends of the
                                                letter's own fade, so the band has
                                                no hard edge at either side */
-          var v = t.toFixed(3);
+          var v = t.toFixed(2);
           if (litLast[i] !== v){ litChars[i].style.setProperty('--p', v); litLast[i] = v; }
         }
         litA = a; litB = b;

@@ -909,7 +909,7 @@ html:not(.js) .flankEl{opacity:1;transform:none}
    pinned to scroll position rather than to a clock, and it reverses exactly as
    it plays. Mixing in oklab keeps the midpoints from going muddy the way sRGB
    interpolation does between a warm grey and near-black. */
-.lit c{color:color-mix(in oklab, var(--text) calc(var(--p, 0) * 100%), var(--litOff))}
+.lit c{color:var(--litOff)}
 
 /* ==========================================================
    WORK — gallery grid
@@ -1633,10 +1633,14 @@ html.fbv-on::before{opacity:1}
    the paint loop (a translate, like the hero — sticky can't be used under the
    smooth-scroll transform) and the letters light against progress through the
    track rather than against the block's position on screen. */
-@media (prefers-reduced-motion:no-preference){
+/* The pin runs under the smooth-scroll layer only (a fine pointer, 861px and
+   up). On touch devices the page scrolls natively and holding a block still
+   against that, by script or by sticky, judders as the browser's own chrome
+   and scroll anchoring move things under it. There the statement stays in
+   flow and lights from its position on screen, which cannot stutter. */
+@media (prefers-reduced-motion:no-preference) and (pointer:fine) and (min-width:861px){
   .lit{height:calc(100svh + var(--litTravel,110vh));padding-block:0}
-  .lit__pin{height:100svh;display:flex;align-items:center;will-change:transform}
-  html:not(.smooth) .lit__pin{position:sticky;top:0;will-change:auto}
+  .lit__pin{height:100svh;display:flex;align-items:center;will-change:transform;--pinned:1}
 }
 </style>
 </head>
@@ -2151,7 +2155,7 @@ html.fbv-on::before{opacity:1}
     });
     litChars = [].slice.call(lit.querySelectorAll('c'));
     lit.setAttribute('aria-label', parts.join(' '));
-    if (reduce) litChars.forEach(function(c){ c.style.setProperty('--p', '1'); });
+    if (reduce) litChars.forEach(function(c){ c.style.color = 'var(--text)'; });
   }
   /* How many characters wide the mix band is — the whole look of the move.
      Around a word and a half at this measure: wide enough to read as a blend
@@ -2165,6 +2169,10 @@ html.fbv-on::before{opacity:1}
   var LIT_IN = 0.80, LIT_OUT = 0.50;
   var litTop = 0, litH = 0;
   var litPin = document.querySelector('#litTrack .lit__pin');
+  var heroTrackH = 0;
+  function measureHeroTrack(){ heroTrackH = heroTrack ? heroTrack.offsetHeight : 0; }
+  addEventListener('resize', measureHeroTrack); addEventListener('load', measureHeroTrack);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(measureHeroTrack);
   var litTrackTop = 0, litTravel = 0;   /* travel > 0 means the section pins */
   function measureLit(){
     if (!litTrack) return;
@@ -2173,7 +2181,10 @@ html.fbv-on::before{opacity:1}
     litTop = dt(el);
     litH   = el.offsetHeight;
     litTrackTop = dt(litTrack);
-    litTravel = litPin ? Math.max(0, litTrack.offsetHeight - litPin.offsetHeight) : 0;
+    /* only when the pinned-track CSS is in force: in flow the track is taller
+       than the pin by its padding alone, and that is not a travel */
+    var pinned = litPin && getComputedStyle(litPin).getPropertyValue('--pinned').trim() === '1';
+    litTravel = pinned ? Math.max(0, litTrack.offsetHeight - litPin.offsetHeight) : 0;
     if (litPin && !litTravel && litPin.style.transform) litPin.style.transform = '';
   }
   /* The scroll position at which the sweep completes, in either mode. */
@@ -2184,6 +2195,25 @@ html.fbv-on::before{opacity:1}
      bounds of last frame's band. Seeded to the full range so the first frame
      writes every letter once and none are left unset. */
   var litLast = [], litA = 0, litB = litChars.length ? litChars.length - 1 : 0;
+  /* The colour for each step of the fade is mixed once here and written as a
+     plain colour, rather than every letter carrying a color-mix() that the
+     browser re-resolves on each change: on a phone that per-letter style
+     resolution was most of the cost of the sweep. 11 steps is the band's
+     visual resolution; LIT_STEPS below is read by the paint loop. */
+  var LIT_STEPS = 10, litRamp = [];
+  function mixLit(){
+    var probe = document.createElement('span'); probe.style.position = 'absolute'; probe.style.visibility = 'hidden';
+    document.body.appendChild(probe);
+    litRamp = [];
+    for (var s = 0; s <= LIT_STEPS; s++){
+      probe.style.color = 'color-mix(in oklab, var(--text) ' + (s / LIT_STEPS * 100) + '%, var(--litOff))';
+      litRamp.push(getComputedStyle(probe).color);
+    }
+    probe.parentNode.removeChild(probe);
+    litChars.forEach(function(c, i){ var v = litLast[i]; c.style.color = litRamp[v == null ? 0 : v]; });
+  }
+  mixLit();
+  new MutationObserver(mixLit).observe(document.documentElement, { attributes:true, attributeFilter:['data-theme'] });
 
   /* Nothing carries [data-par] since the work grid went to hover-zoom tiles:
      this loop writes an inline transform every frame, and an inline transform
@@ -2442,7 +2472,7 @@ html.fbv-on::before{opacity:1}
        document puts it — underneath.
        Translate only — no scale, no fade. The hero stays flat. */
     if (!reduce && heroEl && heroTrack) {
-      var trackH  = heroTrack.offsetHeight;
+      var trackH  = heroTrackH || heroTrack.offsetHeight;
       var pinSpan = flankFlow ? 0 : Math.max(0, trackH - vh);
       var pin = y < pinSpan ? y : pinSpan;
       heroEl.style.transform = pin === 0
@@ -2639,8 +2669,8 @@ html.fbv-on::before{opacity:1}
           t = t * t * (3 - 2 * t);          /* smoothstep: ease both ends of the
                                                letter's own fade, so the band has
                                                no hard edge at either side */
-          var v = t.toFixed(2);
-          if (litLast[i] !== v){ litChars[i].style.setProperty('--p', v); litLast[i] = v; }
+          var v = Math.round(t * LIT_STEPS);
+          if (litLast[i] !== v){ litChars[i].style.color = litRamp[v]; litLast[i] = v; }
         }
         litA = a; litB = b;
       }
